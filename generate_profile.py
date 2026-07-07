@@ -42,7 +42,7 @@ Reviews:
 Summary:"""
 
 
-with open("./user_profiles/trip_advisor_k_best_features.json") as f:
+with open("./user_profiles/amazon_k_best_features.json") as f:
     data = json.load(f)
 
 profiles = []
@@ -60,8 +60,8 @@ for user in tqdm(data, total=len(data)):
     prompt = create_trip_advisor_prompt(reviews)
 
     # generate summary
-    inputs = tokenizer(prompt, return_tensors="pt").to("cuda")
-    input_ids = inputs["input_ids"].to("cuda")
+    inputs = tokenizer(prompt, return_tensors="pt").to("mps")
+    input_ids = inputs["input_ids"].to("mps")
     mask = inputs["attention_mask"]
 
     gen_tokens = model.generate(
@@ -77,5 +77,5 @@ for user in tqdm(data, total=len(data)):
     summary = gen_text.strip().replace("\n", "").replace("</s>", "")
     profile_data["profile"] = summary
     profiles.append(profile_data)
-with open(f"user_profiles/trip_advisor_profiles_mistral.json", "w") as f:
+with open(f"user_profiles/amazon_profiles_mistral.json", "w") as f:
     json.dump(profiles, f, indent=4)
