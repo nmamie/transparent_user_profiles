@@ -60,8 +60,8 @@ for user in tqdm(data, total=len(data)):
     prompt = create_trip_advisor_prompt(reviews)
 
     # generate summary
-    inputs = tokenizer(prompt, return_tensors="pt").to("mps")
-    input_ids = inputs["input_ids"].to("mps")
+    inputs = tokenizer(prompt, return_tensors="pt").to("cuda")
+    input_ids = inputs["input_ids"].to("cuda")
     mask = inputs["attention_mask"]
 
     gen_tokens = model.generate(

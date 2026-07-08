@@ -62,9 +62,9 @@ def read_data(dataset):
     The test set that is 20% of interactions
   """
   reader = Reader()
-  train_data = reader.read(fpath=f"datasets/{dataset}/{fold}/train_data.txt", fmt='UIR', sep='\t')
-  tune_data = reader.read(fpath=f"datasets/{dataset}/{fold}/validation_data.txt", fmt='UIR', sep='\t')
-  test_data = reader.read(fpath=f"datasets/{dataset}/{fold}/test_data.txt", fmt='UIR', sep='\t')
+  train_data = reader.read(fpath=f"datasets/{dataset}/train.txt", fmt='UIR', sep='\t')
+  tune_data = reader.read(fpath=f"datasets/{dataset}/validation.txt", fmt='UIR', sep='\t')
+  test_data = reader.read(fpath=f"datasets/{dataset}/test.txt", fmt='UIR', sep='\t')
   return train_data, tune_data, test_data
 
 # load data into Cornac evaluation method
@@ -132,7 +132,7 @@ def run_model(eval_method):
 
   # define metrics to evaluate the models
   metrics = [
-            RMSE(), MAE(),
+            RMSE(), MAE(), MAP(), NDCG(k=10)
             ]
 
   # put it together in an experiment, voilà!

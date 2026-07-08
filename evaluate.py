@@ -10,6 +10,9 @@ import pandas as pd
 import torch
 import argparse
 
+import cornac
+from cornac.metrics import Precision, Recall, NDCG, AUC, MAP, FMeasure, MRR, RMSE, MAE
+
 parser = argparse.ArgumentParser(description="model configuration")
 
 # Add arguments
@@ -59,7 +62,7 @@ for i in profiles_data:
 
 
 dataset = load_dataset("json", data_files=data_files)
-model_name = "out/llama-out"
+model_name = args.pretrained_model
 tokenizer = AutoTokenizer.from_pretrained('gpt2', device_map="auto")
 tokenizer.pad_token = tokenizer.eos_token
 tokenizer.padding_side = "right"
@@ -67,10 +70,18 @@ tokenizer.padding_side = "right"
 # convert input to prompt
 def convert_to_prompt(example):
     user_id = example["user"]
-    example["profile"] = profiles[user_id]
-    example[
-        "prompt"
-    ] = f"User Profile: {example['profile']} Based on my user profile, from a scale of 1 to 5 (1 being the lowest and 5 being the highest), i would give \"{example['title']}\" a rating of"
+    
+    # Use .get() with a fallback in case a user_id is missing in profiles
+    example["profile"] = profiles.get(user_id, "No profile available")
+    
+    # Changed example['title'] to example['item']
+    item_identifier = example.get('item', 'this item') 
+    
+    example["prompt"] = (
+        f"User Profile: {example['profile']} Based on my user profile, "
+        f"from a scale of 1 to 5 (1 being the lowest and 5 being the highest), "
+        f"i would give \"{item_identifier}\" a rating of"
+    )
     return example
 
 
@@ -100,34 +111,97 @@ model.config.pad_token_id = model.config.eos_token_id
 
 
 def compute_scaled_metrics(eval_pred):
-    # print([str(id) for id in eval_pred.users])
     scaled_predictions, scaled_labels = eval_pred
-    # Assuming this is a regression problem, we'll take the first value from the output logits
     scaled_predictions = scaled_predictions[:, 0]
 
-    # Inverse scaling
+    # Inverse scaling: convert normalized [0, 1] values back to original [1, 5] star ratings
     def inverse_scale(values, min_val=1, max_val=5):
         return [s * (max_val - min_val) + min_val for s in values]
 
-    original_predictions = inverse_scale(scaled_predictions)
-    original_labels = inverse_scale(scaled_labels)
+    original_predictions = np.array(inverse_scale(scaled_predictions))
+    original_labels = np.array(inverse_scale(scaled_labels))
 
-    # Compute the metrics
-    rmse = np.sqrt(
-        ((np.array(original_predictions) - np.array(original_labels)) ** 2).mean()
-    )
-    mae = np.abs(np.array(original_predictions) - np.array(original_labels)).mean()
+    # Pull user and item metadata vectors directly from the current evaluation slice
+    users = np.array(trainer.eval_dataset['user'])
+    items = np.array(trainer.eval_dataset['item'])
 
-    users = trainer.eval_dataset['user']
-    items = trainer.eval_dataset['item']
-    output = [{'user': user, 'item': item, 'predicted_rating': pred, 'true_rating': actual} for (user,item,pred,actual) in zip(users,items, original_predictions, original_labels) ]
+    # 1. Global Rating Metrics
+    rmse_score = RMSE().compute(original_labels, original_predictions)
+    mae_score = MAE().compute(original_labels, original_predictions)
+
+    # 2. Per-User Ranking Metrics (Sakai Condensed Lists Strategy)
+    map_eval = MAP()
+    ndcg10_eval = NDCG(k=10)
+
+    user_map_scores = []
+    user_ndcg_scores = []
+
+    unique_users = np.unique(users)
+    
+    for u in unique_users:
+        # Filter indices belonging strictly to the current user
+        u_indices = np.where(users == u)[0]
+        
+        # Sakai (2007) constraint: We only extract and pass items explicitly rated in this test split
+        u_items = items[u_indices]
+        u_true_ratings = original_labels[u_indices]
+        u_pred_ratings = original_predictions[u_indices]
+
+        # Define ground-truth positive items using the 4.0 relevance threshold
+        gt_pos = u_items[u_true_ratings >= 4.0]
+        
+        # If the user has no positive ground-truth items in the test slice, skip them
+        if len(gt_pos) == 0:
+            continue
+
+        # --- MAP Calculation ---
+        # Signature: compute(item_indices, pd_scores, gt_pos)
+        u_map = map_eval.compute(
+            item_indices=u_items, 
+            pd_scores=u_pred_ratings, 
+            gt_pos=gt_pos
+        )
+
+        # --- NDCG Calculation ---
+        # Signature: compute(gt_pos, pd_rank)
+        # Create pd_rank by sorting u_items by u_pred_ratings in descending order (-)
+        sorted_indices = np.argsort(-u_pred_ratings)
+        pd_rank = u_items[sorted_indices]
+
+        u_ndcg = ndcg10_eval.compute(
+            gt_pos=gt_pos, 
+            pd_rank=pd_rank
+        )
+
+        user_map_scores.append(u_map)
+        user_ndcg_scores.append(u_ndcg)
+
+    # Compute final averages across all valid evaluation users
+    final_map = np.mean(user_map_scores) if user_map_scores else 0.0
+    final_ndcg = np.mean(user_ndcg_scores) if user_ndcg_scores else 0.0
+
+    # 3. Save detailed outputs to a JSONL file if specified
     if args.output:
+        output = [{
+            'user': str(u_id), 
+            'item': str(i_id), 
+            'predicted_rating': float(p), 
+            'true_rating': float(t)
+        } for (u_id, i_id, p, t) in zip(users, items, original_predictions, original_labels)]
+        
         with open(args.output, 'w') as outfile:
             for entry in output:
                 json.dump(entry, outfile)
                 outfile.write('\n')
-    return {"rmse": rmse, "mae": mae}
 
+    return {
+        "rmse": float(rmse_score), 
+        "mae": float(mae_score), 
+        "map": float(final_map), 
+        "ndcg10": float(final_ndcg)
+    }
+    
+    
 trainer = Trainer(
     model=model,
     eval_dataset=tokenized_datasets["test"],

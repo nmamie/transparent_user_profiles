@@ -23,7 +23,6 @@ parser.add_argument(
     default="gpt2",
     help="Pretrained model name",
 )
-parser.add_argument("output_dir", type=str, required=True, help="output directory")
 parser.add_argument(
     "--num_train_epochs", type=int, required=False, default=5, help="num train epochs"
 )
@@ -71,13 +70,19 @@ tokenizer = AutoTokenizer.from_pretrained(model_name, device_map="auto")
 tokenizer.pad_token = tokenizer.eos_token
 tokenizer.padding_side = "right"
 
-# convert input to prompt
+
 def convert_to_prompt(example):
     user_id = example["user"]
-    example["profile"] = profiles[user_id]
-    example[
-        "prompt"
-    ] = f"User Profile:{example['profile']} Based on my user profile, from a scale of 1 to 5 (1 being the lowest and 5 being the highest), i would give \"{example['title']}\" a rating of"
+    example["profile"] = profiles.get(user_id, "No profile available")
+
+    # Use .get() to avoid KeyError if 'title' is missing
+    title = example.get("title", "this item")
+
+    example["prompt"] = (
+        f"User Profile:{example['profile']} Based on my user profile, "
+        f"from a scale of 1 to 5 (1 being the lowest and 5 being the highest), "
+        f"i would give \"{title}\" a rating of"
+    )
     return example
 
 
@@ -141,7 +146,7 @@ training_args = TrainingArguments(
     logging_dir=f"./{args.output_dir}/logs",
     logging_steps=1000,
     save_strategy="epoch",
-    evaluation_strategy="epoch",
+    eval_strategy="epoch",
     save_total_limit=1,
     learning_rate=args.lr,
     num_train_epochs=args.num_train_epochs,
