@@ -83,9 +83,8 @@ for _, row in user_items.iterrows():
     for item in items:
         title = item.get("title", "")
         description = item.get("description", "")
-        review = item.get("review", "")
-        if title or description or review:
-            history_text.append(f"Title: {title} | Description: {description} | Review: {review}")
+        if title or description:
+            history_text.append(f"Title: {title} | Description: {description}")
     user_history[user_id] = " | ".join(history_text) if history_text else "No review history available"
 
 model_name = "gpt2"

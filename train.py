@@ -23,6 +23,15 @@ parser.add_argument(
     default="gpt2",
     help="Pretrained model name",
 )
+
+parser.add_argument(
+    "--context_in", type=str, required=False, default="user profile", choices=["user profile", "review history", "item-review history"], help="input context for the prompt"
+)
+
+parser.add_argument(
+    "--context_out", type=str, required=False, default="item title", choices=["item title", "item title and description"], help="output context for the prompt"
+)
+
 parser.add_argument(
     "--num_train_epochs", type=int, required=False, default=5, help="num train epochs"
 )
@@ -63,25 +72,78 @@ for i in profiles_data:
 
 dataset = load_dataset("json", data_files=data_files)
 
-model_name = "gpt2"
+model_name = args.pretrained_model
 
-# Load the GPT-2 tokenizer
-tokenizer = AutoTokenizer.from_pretrained(model_name, device_map="auto")
+# Load the tokenizer
+tokenizer = AutoTokenizer.from_pretrained(model_name)
 tokenizer.pad_token = tokenizer.eos_token
 tokenizer.padding_side = "right"
 
 
 def convert_to_prompt(example):
     user_id = example["user"]
-    example["profile"] = profiles.get(user_id, "No profile available")
+    # Build input context based on the selected option
+    def summarize_reviews(reviews, max_reviews=5):
+        if not reviews:
+            return "No review history available"
+        # reviews may be list of dicts or list of strings
+        out = []
+        for r in reviews[-max_reviews:]:
+            if isinstance(r, dict):
+                text = r.get("text") or r.get("review") or r.get("body") or r.get("comment")
+                rating = r.get("rating") or r.get("score")
+                if rating is not None:
+                    out.append(f"[{rating}] {text}" if text else f"[{rating}]")
+                else:
+                    out.append(text if text else "<no-text>")
+            else:
+                out.append(str(r))
+        return " || ".join([o for o in out if o])
 
-    # Use .get() to avoid KeyError if 'title' is missing
+    if args.context_in == "user profile":
+        # profile entry may contain summary or review history inside
+        profile = profiles.get(user_id)
+        if isinstance(profile, dict):
+            # prefer explicit profile text, otherwise fall back to reviews inside profile
+            input_context = profile.get("summary") or profile.get("profile") or summarize_reviews(profile.get("review_history") or profile.get("reviews"))
+        else:
+            input_context = profile or "No profile available"
+    elif args.context_in == "review history":
+        # try several possible keys in the example and in the stored profile
+        input_context = example.get("review_history") or example.get("reviews") or example.get("user_reviews")
+        if not input_context:
+            # fallback to any reviews inside the profile data
+            profile = profiles.get(user_id, {})
+            input_context = profile.get("review_history") or profile.get("reviews")
+        input_context = summarize_reviews(input_context)
+    elif args.context_in == "item-review history":
+        # item-review history: reviews for this specific item
+        # try example keys first
+        item_reviews = example.get("item_review_history") or example.get("item_reviews") or example.get("reviews_for_item")
+        if not item_reviews:
+            # sometimes dataset uses a nested item object
+            item = example.get("item") or {}
+            item_reviews = item.get("reviews") if isinstance(item, dict) else None
+        if not item_reviews:
+            # fallback: look for reviews that mention the item id in profile
+            profile = profiles.get(user_id, {})
+            item_reviews = profile.get("item_review_history") or profile.get("item_reviews")
+        input_context = summarize_reviews(item_reviews)
+    else:
+        input_context = ""
+
+    # Build output context
     title = example.get("title", "this item")
+    if args.context_out == "item title":
+        output_ctx = title
+    else:
+        desc = example.get("description", "No description available")
+        output_ctx = f"{title}: {desc}"
 
     example["prompt"] = (
-        f"User Profile:{example['profile']} Based on my user profile, "
+        f"Input Context: {input_context} Based on the input context, "
         f"from a scale of 1 to 5 (1 being the lowest and 5 being the highest), "
-        f"i would give \"{title}\" a rating of"
+        f"I would give \"{output_ctx}\" a rating of"
     )
     return example
 

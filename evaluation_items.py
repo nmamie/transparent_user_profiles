@@ -3,9 +3,10 @@ from transformers import (
     AutoModelForSequenceClassification,
     Trainer,
 )
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 import json
 import numpy as np
+import pandas as pd
 import torch
 import argparse
 
@@ -21,23 +22,17 @@ parser.add_argument(
     default="gpt2",
     help="Pretrained model name",
 )
-parser.add_argument(
-    "--sampling_file", type=str, required=False, help="sampling"
-)
+
 parser.add_argument(
     "--profiles", type=str, required=True, help="profiles"
 )
+
+parser.add_argument(
+    "--sampling_file", type=str, required=False, help="sampling"
+)
+
 parser.add_argument(
     "--output", type=str, required=False, help="output"
-)
-parser.add_argument(
-    "--add_profile", type=str, required=False, help="add to profile"
-)
-parser.add_argument(
-    "--context_in", type=str, required=False, default="user profile", choices=["user profile", "review history", "item-review history"], help="input context for the prompt"
-)
-parser.add_argument(
-    "--context_out", type=str, required=False, default="item title", choices=["item title", "item title and description"], help="output context for the prompt"
 )
 parser.add_argument(
     "--seed", type=int, required=False, default=42, help="seed"
@@ -50,41 +45,74 @@ np.random.seed(args.seed)
 
 # Load the dataset
 data_files = {
-    # "test": "datasets/TripAdvisor/test.jsonl",
     "test": "datasets/Amazon/MoviesAndTV/test.jsonl"
 }
 
-with open(args.profiles) as f:
-    profiles_data = json.load(f)
+user_items_path = "datasets/Amazon/MoviesAndTV/user_items.jsonl"
 
-profiles = {}
 
-for i in profiles_data:
-    user_id = i["user_id"]
-    user_profile = i["profile"]
-    profiles[user_id] = user_profile
+def load_jsonl_records(path):
+    records = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return pd.DataFrame(records)
+
+
+user_items = load_jsonl_records(user_items_path)
+
+# Build user review history from user_items
+user_history = {}
+for _, row in user_items.iterrows():
+    user_id = row["user"]
+    items = row.get("items", [])
+    # store full item dicts so we can filter out the target item at prompt time
+    user_history[user_id] = items
 
 
 dataset = load_dataset("json", data_files=data_files)
 model_name = args.pretrained_model
-tokenizer = AutoTokenizer.from_pretrained(model_name, device_map="auto")
+tokenizer = AutoTokenizer.from_pretrained('gpt2', device_map="auto")
 tokenizer.pad_token = tokenizer.eos_token
 tokenizer.padding_side = "right"
 
 # convert input to prompt
 def convert_to_prompt(example):
     user_id = example["user"]
-    
-    # Use .get() with a fallback in case a user_id is missing in profiles
-    example["profile"] = profiles.get(user_id, "No profile available")
-    
-    # Changed example['title'] to example['item']
-    item_identifier = example.get('item', 'this item') 
-    
+    # Filter out the review of the target item to avoid leaking the label
+    user_items_list = user_history.get(user_id, [])
+
+    target_item_id = example.get("item")
+    target_title = example.get("title")
+
+    history_text = []
+    for it in user_items_list:
+        # skip if this history entry corresponds to the item being predicted
+        if target_item_id is not None and it.get("item") == target_item_id:
+            continue
+        if target_title is not None and it.get("title") == target_title:
+            continue
+        t = it.get("title", "")
+        d = it.get("description", "")
+        r = it.get("review", "")
+        if t or d or r:
+            history_text.append(f"Title: {t} | Description: {d} | Review: {r}")
+
+    review_history = " | ".join(history_text) if history_text else "No review history available"
+
+    title = example.get("title", "this item")
+    description = example.get("description", "No description available")
+
     example["prompt"] = (
-        f"User Profile: {example['profile']} Based on my user profile, "
+        f"User Review History: {review_history} Based on my review history, "
         f"from a scale of 1 to 5 (1 being the lowest and 5 being the highest), "
-        f"i would give \"{item_identifier}\" a rating of"
+        f"i would give \"{title}\"; Description: \"{description}\" a rating of"
     )
     return example
 
