@@ -60,6 +60,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
 --context_in "user profile" \
 --context_out "item title" \
 --output results/profile-title.jsonl \
+--summary_file results/evaluation_summary_comb.json \
 --seed 42
 
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
@@ -68,6 +69,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
 --context_in "user profile" \
 --context_out "item title and description" \
 --output results/profile-title-and-description.jsonl \
+--summary_file results/evaluation_summary_comb.json \
 --seed 42
 
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
@@ -76,6 +78,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
 --context_in "review history" \
 --context_out "item title" \
 --output results/review-history-title.jsonl \
+--summary_file results/evaluation_summary_comb.json \
 --seed 42
 
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
@@ -84,6 +87,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
 --context_in "review history" \
 --context_out "item title and description" \
 --output results/review-history-title-and-description.jsonl \
+--summary_file results/evaluation_summary_comb.json \
 --seed 42
 
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
@@ -92,6 +96,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
 --context_in "item-review history" \
 --context_out "item title" \
 --output results/item-review-history-title.jsonl \
+--summary_file results/evaluation_summary_comb.json \
 --seed 42
 
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
@@ -100,4 +105,8 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
 --context_in "item-review history" \
 --context_out "item title and description" \
 --output results/item-review-history-title-and-description.jsonl \
+--summary_file results/evaluation_summary_comb.json \
 --seed 42
+
+# Generate and print LaTeX table for train_comb
+python generate_latex_table.py --input results/evaluation_summary_comb.json --output results/latex_table_comb.tex
