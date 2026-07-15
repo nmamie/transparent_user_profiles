@@ -45,8 +45,8 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-torch.manual_seed(args.seed)
-np.random.seed(args.seed)
+from .utils import set_random_seeds(args.seed)
+set_random_seeds(args.seed)
 
 # Load the dataset
 data_files = {

@@ -37,7 +37,7 @@ parser.add_argument(
     "--num_train_epochs", type=int, required=False, default=5, help="num train epochs"
 )
 parser.add_argument(
-    "--seed", type=int, required=False, default=42, help="num train epochs"
+    "--seed", type=int, required=False, default=42, help="seed for reproducibility"
 )
 parser.add_argument(
     "--lr", type=float, required=False, default=3e-4, help="learning rate"
@@ -47,8 +47,8 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-torch.manual_seed(args.seed)
-np.random.seed(args.seed)
+from utils import set_random_seeds(args.seed)
+set_random_seeds(args.seed)
 
 
 # Load the dataset (for demonstration, we'll use the IMDb dataset)
