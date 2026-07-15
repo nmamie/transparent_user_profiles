@@ -42,6 +42,9 @@ parser.add_argument(
 parser.add_argument(
     "--seed", type=int, required=False, default=42, help="seed"
 )
+parser.add_argument(
+    "--summary_file", type=str, required=False, default="results/evaluation_summary.json", help="path to save aggregated evaluation metrics"
+)
 
 args = parser.parse_args()
 
@@ -312,3 +315,38 @@ print('saving to:', args.output)
 # Evaluate the model
 results = trainer.evaluate()
 print(results)
+
+if args.summary_file:
+    import os
+    results_to_save = {
+        "model_name": model_name,
+        "context_in": args.context_in,
+        "context_out": args.context_out,
+        "rmse": results.get("eval_rmse") or results.get("rmse"),
+        "mae": results.get("eval_mae") or results.get("mae"),
+        "map": results.get("eval_map") or results.get("map"),
+        "ndcg10": results.get("eval_ndcg10") or results.get("ndcg10")
+    }
+    
+    summary_data = []
+    if os.path.exists(args.summary_file):
+        try:
+            with open(args.summary_file, "r") as sf:
+                summary_data = json.load(sf)
+        except Exception:
+            summary_data = []
+            
+    updated = False
+    for entry in summary_data:
+        if (entry.get("context_in") == args.context_in and 
+            entry.get("context_out") == args.context_out):
+            entry.update(results_to_save)
+            updated = True
+            break
+    if not updated:
+        summary_data.append(results_to_save)
+        
+    os.makedirs(os.path.dirname(args.summary_file), exist_ok=True)
+    with open(args.summary_file, "w") as sf:
+        json.dump(summary_data, sf, indent=2)
+    print(f"Metrics saved to {args.summary_file}")
