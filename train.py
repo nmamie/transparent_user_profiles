@@ -11,11 +11,12 @@ import numpy as np
 import pandas as pd
 import torch
 import argparse
+from pathlib import Path
 
 parser = argparse.ArgumentParser(description="model configuration")
 
 # Add arguments
-parser.add_argument("--output_dir", type=str, required=True, help="output directory")
+parser.add_argument("--output_dir", type=str, required=True, help="output name inside out/")
 parser.add_argument(
     "--pretrained_model",
     type=str,
@@ -72,10 +73,36 @@ for i in profiles_data:
 
 dataset = load_dataset("json", data_files=data_files)
 
+# Load user items review history if needed
+user_reviews_map = {}
+item_reviews_map = {}
+if args.context_in in ["review history", "item-review history"]:
+    import os
+    train_file = data_files["train"]
+    parent_dir = os.path.dirname(train_file)
+    user_items_path = os.path.join(parent_dir, "user_items.jsonl")
+    if os.path.exists(user_items_path):
+        with open(user_items_path, "r", encoding="utf-8") as f:
+            user_items_data = json.load(f)
+        for u_id, items in user_items_data.items():
+            user_reviews_map[u_id] = items
+            for it in items:
+                it_id = it.get("item_id")
+                if it_id:
+                    if it_id not in item_reviews_map:
+                        item_reviews_map[it_id] = []
+                    item_reviews_map[it_id].append({
+                        "user_id": u_id,
+                        "review": it.get("review", ""),
+                        "rating": it.get("rating"),
+                        "title": it.get("title", ""),
+                        "description": it.get("description", "")
+                    })
+
 model_name = args.pretrained_model
 
 # Load the tokenizer
-tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 tokenizer.pad_token = tokenizer.eos_token
 tokenizer.padding_side = "right"
 
@@ -109,26 +136,44 @@ def convert_to_prompt(example):
         else:
             input_context = profile or "No profile available"
     elif args.context_in == "review history":
-        # try several possible keys in the example and in the stored profile
-        input_context = example.get("review_history") or example.get("reviews") or example.get("user_reviews")
-        if not input_context:
-            # fallback to any reviews inside the profile data
-            profile = profiles.get(user_id, {})
-            input_context = profile.get("review_history") or profile.get("reviews")
-        input_context = summarize_reviews(input_context)
+        target_item = example.get("item")
+        user_revs = user_reviews_map.get(user_id, [])
+        filtered_revs = [r for r in user_revs if r.get("item_id") != target_item]
+        if filtered_revs:
+            input_context = summarize_reviews(filtered_revs)
+        else:
+            # try several possible keys in the example and in the stored profile
+            input_context = example.get("review_history") or example.get("reviews") or example.get("user_reviews")
+            if not input_context:
+                # fallback to any reviews inside the profile data
+                profile = profiles.get(user_id, {})
+                if isinstance(profile, dict):
+                    input_context = profile.get("review_history") or profile.get("reviews")
+                else:
+                    input_context = None
+            input_context = summarize_reviews(input_context)
     elif args.context_in == "item-review history":
-        # item-review history: reviews for this specific item
-        # try example keys first
-        item_reviews = example.get("item_review_history") or example.get("item_reviews") or example.get("reviews_for_item")
-        if not item_reviews:
-            # sometimes dataset uses a nested item object
-            item = example.get("item") or {}
-            item_reviews = item.get("reviews") if isinstance(item, dict) else None
-        if not item_reviews:
-            # fallback: look for reviews that mention the item id in profile
-            profile = profiles.get(user_id, {})
-            item_reviews = profile.get("item_review_history") or profile.get("item_reviews")
-        input_context = summarize_reviews(item_reviews)
+        target_item = example.get("item")
+        item_revs = item_reviews_map.get(target_item, [])
+        filtered_revs = [r for r in item_revs if r.get("user_id") != user_id]
+        if filtered_revs:
+            input_context = summarize_reviews(filtered_revs)
+        else:
+            # item-review history: reviews for this specific item
+            # try example keys first
+            item_reviews = example.get("item_review_history") or example.get("item_reviews") or example.get("reviews_for_item")
+            if not item_reviews:
+                # sometimes dataset uses a nested item object
+                item = example.get("item") or {}
+                item_reviews = item.get("reviews") if isinstance(item, dict) else None
+            if not item_reviews:
+                # fallback: look for reviews that mention the item id in profile
+                profile = profiles.get(user_id, {})
+                if isinstance(profile, dict):
+                    item_reviews = profile.get("item_review_history") or profile.get("item_reviews")
+                else:
+                    item_reviews = None
+            input_context = summarize_reviews(item_reviews)
     else:
         input_context = ""
 
@@ -201,18 +246,21 @@ early_stopping_callback = EarlyStoppingCallback(
     early_stopping_threshold=0.0  # Minimum improvement to qualify as an improvement.
 )
 
+results_dir = Path("out") / args.output_dir
+results_dir.mkdir(parents=True, exist_ok=True)
+
 # Define training arguments and set up Trainer
 training_args = TrainingArguments(
     per_device_train_batch_size=args.batch_size,
     per_device_eval_batch_size=args.batch_size,
-    logging_dir=f"./{args.output_dir}/logs",
+    logging_dir=str(results_dir / "logs"),
     logging_steps=1000,
     save_strategy="epoch",
     eval_strategy="epoch",
     save_total_limit=1,
     learning_rate=args.lr,
     num_train_epochs=args.num_train_epochs,
-    output_dir=f"./{args.output_dir}/results",
+    output_dir=str(results_dir),
     remove_unused_columns=True,  # Important!
     seed=args.seed,
     lr_scheduler_type="linear",
@@ -230,4 +278,5 @@ trainer = Trainer(
 
 # Train the model
 trainer.train()
-trainer.save_model(f"./{args.output_dir}")
+trainer.save_model(str(results_dir))
+tokenizer.save_pretrained(str(results_dir))

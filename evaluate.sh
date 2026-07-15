@@ -1,6 +1,6 @@
 ###### EVALUATION COMMANDS ######
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
---pretrained_model ./amazon-out-reproduce-profile-title/results \
+--pretrained_model out/amazon-out-reproduce-profile-title \
 --profiles user_profiles/amazon_profiles.json \
 --context_in "user profile" \
 --context_out "item title" \
@@ -8,7 +8,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
 --seed 42
 
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
---pretrained_model ./amazon-out-reproduce-profile-title-and-description/results \
+--pretrained_model out/amazon-out-reproduce-profile-title-and-description \
 --profiles user_profiles/amazon_profiles.json \
 --context_in "user profile" \
 --context_out "item title and description" \
@@ -16,7 +16,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
 --seed 42
 
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
---pretrained_model ./amazon-out-reproduce-review-history-title/results \
+--pretrained_model out/amazon-out-reproduce-review-history-title \
 --profiles user_profiles/amazon_profiles.json \
 --context_in "review history" \
 --context_out "item title" \
@@ -24,7 +24,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
 --seed 42
 
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
---pretrained_model ./amazon-out-reproduce-review-history-title-and-description/results \
+--pretrained_model out/amazon-out-reproduce-review-history-title-and-description \
 --profiles user_profiles/amazon_profiles.json \
 --context_in "review history" \
 --context_out "item title and description" \
@@ -32,7 +32,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
 --seed 42
 
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
---pretrained_model ./amazon-out-reproduce-item-review-history-title/results \
+--pretrained_model out/amazon-out-reproduce-item-review-history-title \
 --profiles user_profiles/amazon_profiles.json \
 --context_in "item-review history" \
 --context_out "item title" \
@@ -40,7 +40,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
 --seed 42
 
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python evaluate.py \
---pretrained_model ./amazon-out-reproduce-item-review-history-title-and-description/results \
+--pretrained_model out/amazon-out-reproduce-item-review-history-title-and-description \
 --profiles user_profiles/amazon_profiles.json \
 --context_in "item-review history" \
 --context_out "item title and description" \
