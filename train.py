@@ -55,7 +55,7 @@ np.random.seed(args.seed)
 # Load the dataset
 data_files = {
     "train": "datasets/Amazon/MoviesAndTV/train.jsonl",
-    "test": "datasets/Amazon/MoviesAndTV/test.jsonl",
+    "eval": "datasets/Amazon/MoviesAndTV/evaluation.jsonl",
     # "train": "datasets/TripAdvisor/train.jsonl",
     # "test": "datasets/TripAdvisor/test.jsonl",
 }
