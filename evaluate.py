@@ -48,7 +48,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-from .utils import set_random_seeds(args.seed)
+from utils import set_random_seeds
 set_random_seeds(args.seed)
 
 # Load the dataset
@@ -338,7 +338,8 @@ if args.summary_file:
             
     updated = False
     for entry in summary_data:
-        if (entry.get("context_in") == args.context_in and 
+        if (entry.get("model_name") == model_name and
+            entry.get("context_in") == args.context_in and 
             entry.get("context_out") == args.context_out):
             entry.update(results_to_save)
             updated = True

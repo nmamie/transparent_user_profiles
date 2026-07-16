@@ -1,0 +1,47 @@
+[
+  {
+    "model_name": "out/amazon-out-reproduce-seeds41",
+    "context_in": "user profile",
+    "context_out": "item title",
+    "rmse": 0.948780357837677,
+    "mae": 0.6897348761558533,
+    "map": 0.9213805710230184,
+    "ndcg10": 0.9458067676259896
+  },
+  {
+    "model_name": "out/amazon-out-reproduce-seeds37",
+    "context_in": "user profile",
+    "context_out": "item title",
+    "rmse": 0.948009192943573,
+    "mae": 0.6896012425422668,
+    "map": 0.9208126697392734,
+    "ndcg10": 0.94511753512709
+  },
+  {
+    "model_name": "out/amazon-out-reproduce-seeds38",
+    "context_in": "user profile",
+    "context_out": "item title",
+    "rmse": 0.948859691619873,
+    "mae": 0.6863104104995728,
+    "map": 0.9211110369958456,
+    "ndcg10": 0.9457812036614243
+  },
+  {
+    "model_name": "out/amazon-out-reproduce-seeds39",
+    "context_in": "user profile",
+    "context_out": "item title",
+    "rmse": 0.946776270866394,
+    "mae": 0.6887224912643433,
+    "map": 0.9195203859525365,
+    "ndcg10": 0.9447963680738909
+  },
+  {
+    "model_name": "out/amazon-out-reproduce-seeds40",
+    "context_in": "user profile",
+    "context_out": "item title",
+    "rmse": 0.9596418142318726,
+    "mae": 0.7045034766197205,
+    "map": 0.9189922023082453,
+    "ndcg10": 0.9438651069803601
+  }
+]

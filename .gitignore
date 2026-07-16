@@ -4,5 +4,6 @@ CornacExp**
 out/amazon-out/results/checkpoint-22230/
 model.safetensors**
 out/
-results/
 datasets/Amazon/MoviesAndTV/user_items.jsonl
+src/
+datasets/Amazon/MoviesAndTV/reviews.pickle

@@ -146,9 +146,9 @@ if __name__ == "__main__":
 
     # remove items without a title
     for idx, review in enumerate(reviews):
-        # if review["item"] in items_with_titles:
-        review["index"] = idx
-        user_reviews[review["user"]].append(review)
+        if review["item"] in items_with_titles:
+            review["index"] = idx
+            user_reviews[review["user"]].append(review)
 
     # print(f"pre-filtered number of users: {len(user_reviews)}")
     # user_reviews = {
@@ -166,7 +166,7 @@ if __name__ == "__main__":
                     review['template'] = review['sentence'][0]
                 else:
                     continue
-            # review["title"] = items_with_titles[review["item"]]
+            review["title"] = items_with_titles.get(review["item"], "")
             num_users.add(review["user"])
             num_items.add(review["item"])
             num_explanations.add(review["template"][2])
@@ -177,7 +177,7 @@ if __name__ == "__main__":
                     "label": review["rating"],
                     "review": review["template"][2],
                     "feature": review["template"][0],
-                    # "title": review["title"],
+                    "title": review["title"],
                     "index": review["index"],
                 }
             )
@@ -248,7 +248,7 @@ if __name__ == "__main__":
         item_id = i['item']
         train_users[user_id] = train_users.get(user_id, []) + [i]
         train_items[item_id] = train_items.get(item_id, 0) + 1
-    assert all(len([x for x in X_train if x['user'] == user]) >= 5 for user in train_users)
+    assert all(len(items) >= 5 for items in train_users.values())
     assert all(user in train_users for user in (x['user'] for x in X_val))
     assert all(user in train_users for user in (x['user'] for x in X_test))
 

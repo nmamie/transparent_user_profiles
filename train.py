@@ -47,7 +47,7 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-from utils import set_random_seeds(args.seed)
+from utils import set_random_seeds
 set_random_seeds(args.seed)
 
 
@@ -55,7 +55,7 @@ set_random_seeds(args.seed)
 # Load the dataset
 data_files = {
     "train": "datasets/Amazon/MoviesAndTV/train.jsonl",
-    "eval": "datasets/Amazon/MoviesAndTV/validation.jsonl",
+    "val": "datasets/Amazon/MoviesAndTV/validation.jsonl",
     # "train": "datasets/TripAdvisor/train.jsonl",
     # "test": "datasets/TripAdvisor/test.jsonl",
 }
@@ -271,7 +271,7 @@ trainer = Trainer(
     model=model,
     args=training_args,
     train_dataset=tokenized_datasets["train"],
-    eval_dataset=tokenized_datasets["test"],
+    eval_dataset=tokenized_datasets["val"],
     compute_metrics=compute_metrics,
     callbacks=[early_stopping_callback]
 )

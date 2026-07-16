@@ -1,0 +1,56 @@
+[
+  {
+    "model_name": "out/amazon-out-reproduce-profile-title",
+    "context_in": "user profile",
+    "context_out": "item title",
+    "rmse": 0.9520336389541626,
+    "mae": 0.687319278717041,
+    "map": 0.9199078021445137,
+    "ndcg10": 0.9446041624433754
+  },
+  {
+    "model_name": "out/amazon-out-reproduce-profile-title-and-description",
+    "context_in": "user profile",
+    "context_out": "item title and description",
+    "rmse": 0.9510483741760254,
+    "mae": 0.6923682689666748,
+    "map": 0.920757781387197,
+    "ndcg10": 0.9450996066778514
+  },
+  {
+    "model_name": "out/amazon-out-reproduce-review-history-title",
+    "context_in": "review history",
+    "context_out": "item title",
+    "rmse": 0.9655051231384277,
+    "mae": 0.7170625925064087,
+    "map": 0.9134232117820061,
+    "ndcg10": 0.9396425143498093
+  },
+  {
+    "model_name": "out/amazon-out-reproduce-review-history-title-and-description",
+    "context_in": "review history",
+    "context_out": "item title and description",
+    "rmse": 0.9813063740730286,
+    "mae": 0.7001757025718689,
+    "map": 0.9116301680439841,
+    "ndcg10": 0.9383495419091834
+  },
+  {
+    "model_name": "out/amazon-out-reproduce-item-review-history-title",
+    "context_in": "item-review history",
+    "context_out": "item title",
+    "rmse": 1.0552958250045776,
+    "mae": 0.8260436654090881,
+    "map": 0.9211190078642089,
+    "ndcg10": 0.9457611118939363
+  },
+  {
+    "model_name": "out/amazon-out-reproduce-item-review-history-title-and-description",
+    "context_in": "item-review history",
+    "context_out": "item title and description",
+    "rmse": 1.059234857559204,
+    "mae": 0.8413021564483643,
+    "map": 0.9208577308236845,
+    "ndcg10": 0.9457575340712596
+  }
+]

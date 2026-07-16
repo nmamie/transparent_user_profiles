@@ -1,0 +1,16 @@
+\begin{table}[h]
+\centering
+\caption{Evaluation Results for Different Context Configurations}
+\label{tab:evaluation_results}
+\begin{tabular}{llcccc}
+\hline
+\textbf{Context In} & \textbf{Context Out} & \textbf{MAE} & \textbf{RMSE} & \textbf{MAP} & \textbf{NDCG@10} \\ \hline
+User Profile & Title & 0.6873 & 0.9520 & 0.9199 & 0.9446 \\
+User Profile & Title + Description & 0.6924 & 0.9510 & 0.9208 & 0.9451 \\
+Review History & Title & 0.7171 & 0.9655 & 0.9134 & 0.9396 \\
+Review History & Title + Description & 0.7002 & 0.9813 & 0.9116 & 0.9383 \\
+Item-Review History & Title & 0.8260 & 1.0553 & 0.9211 & 0.9458 \\
+Item-Review History & Title + Description & 0.8413 & 1.0592 & 0.9209 & 0.9458 \\
+\hline
+\end{tabular}
+\end{table}
