@@ -1,120 +1,177 @@
-# User Profile Recommendation
+# Transparent and Scrutable Recommendations Using Natural Language User Profiles
 
-## Datasets
+This repository is based on the official repository for the paper:
 
-For Movies And TV, use the following datasets:
+> **Transparent and Scrutable Recommendations Using Natural Language User Profiles**  
+> *Jerome Ramos, Hossein A. Rahmani, Xi Wang, Xiao Fu, Aldo Lipani*  
+> **ACL 2024** (Long Papers) — [ACL Anthology](https://aclanthology.org/2024.acl-long.753)
 
+The repository has been modified to successfully reproduce the results of this paper, including updating the dependencies, making sure the same evaluation framework is used everywhere, ensuring a proper train-validation-test split and fixing minor bugs in the baseline, training and evaluation scripts. For more, please refer to the detailed reproducibility manuscript.
+
+---
+
+## 📌 Overview
+
+This project introduces natural language user profiles derived from interaction histories to build **transparent, interpretable, and scrutable** recommendation systems using Large Language Models (LLMs).
+
+---
+
+## 📂 Datasets
+
+The preprocessed datasets are located under `datasets/`:
+
+* **Amazon Movies and TV**:
+  ```
+  datasets/Amazon/MoviesAndTV/train.jsonl
+  datasets/Amazon/MoviesAndTV/validation.jsonl
+  datasets/Amazon/MoviesAndTV/test.jsonl
+  ```
+* **TripAdvisor**:
+  ```
+  datasets/TripAdvisor/train.jsonl
+  datasets/TripAdvisor/validation.jsonl
+  datasets/TripAdvisor/test.jsonl
+  ```
+
+*For raw data source format and Sentires toolkit details, see [PETER Repository](https://github.com/lileipisces/PETER).*
+
+---
+
+## 👤 User Profiles
+
+Generated natural language user profiles are located in the `user_profiles/` directory:
+
+* `amazon_profiles.json` (Llama2-7B, 5 features)
+* `amazon_profiles_mistral.json` (Mistral-7B, 5 features)
+* `trip_advisor_profiles.json` (Llama2-7B, 5 features)
+* `trip_advisor_profiles_mistral.json` (Mistral-7B, 5 features)
+
+*Note: Filenames with numbers (e.g., `amazon_profiles_3.json`) represent profiles constructed using specific feature budgets.*
+
+---
+
+## 📊 Recommendation Baselines (`rec_baselines.py`)
+
+Run traditional recommendation baselines (`MostPop`, `UserKNN`, `ItemKNN`, `BPR`, `WMF`, `MF`, `NeuMF`) via Cornac:
+
+### 1. Test-Set Reranking Protocol (Matches Paper `evaluate.py`)
+To evaluate baselines under the exact Test-Set Reranking protocol (Sakai Condensed List) used in the paper:
+
+```bash
+python rec_baselines.py -d Amazon/MoviesAndTV --protocol reranking
 ```
-datasets/Amazon/MoviesAndTV/train.jsonl
-datasets/Amazon/MoviesAndTV/validation.jsonl
-datasets/Amazon/MoviesAndTV/test.jsonl
+
+### 2. Compare Original Paper vs. Tuned Baselines Side-by-Side
+To run both **Original Paper Hyperparameters** and **Improved Tuned Hyperparameters** in a single comparative table:
+
+```bash
+python rec_baselines.py -d Amazon/MoviesAndTV --mode both --protocol reranking
 ```
 
-For TripAdvisor, use the following datasets:
+### 3. Full-Catalog Ranking Protocol
+To evaluate baselines against the full candidate catalog (5,459 items):
 
-```
-datasets/TripAdvisor/train.jsonl
-datasets/TripAdvisor/validation.jsonl
-datasets/TripAdvisor/test.jsonl
-```
-
-For more information, please see (https://github.com/lileipisces/PETER) for the entire original data source and information on how to use the Sentires toolkit.
-
-## User Profiles
-
-All user profiles can be found in the `user_profiles` directory. The number indicates how many features were used to generate that profile. Profiles without a number were generated using 5 features. In addition, we provide both Llama2-7B and Mistral-7B profiles.
-
-The main profiles used for testing is
-
-```
-amazon_profiles.json
-amazon_profiles_mistral.json
-trip_advisor_profiles.json
-trip_advisor_profiles_mistral.json
+```bash
+python rec_baselines.py -d Amazon/MoviesAndTV --protocol full
 ```
 
-## Recommendation Baselines
+---
 
-To run the available baselines on Cornac,
+## 🛠️ Step-by-Step Reproduction Guide
 
-> `rec_baselines.py`
-
-```
-python rec_baselines.py -d Amazon/MoviesAndTV
-```
-
-## Generating User Profiles
-
-To rerun our experiments, you can use the saved user profiles in the `user_profiles` directory. To generate the user profiles from scratch, follow the instructions below.
-
-### Preprocess
-
-To preprocess the data, run:
-
-```
+### Step 1: Preprocess Data
+```bash
 python preprocess.py
 ```
 
-### Generate NL Profiles
-
-To generate the profiles, run the following command with the appropriate LLM.
-
-```
+### Step 2: Generate Natural Language Profiles
+Generate user profiles from interaction histories using an LLM:
+```bash
 python generate_profile.py
 ```
 
-## Training
-
-Here is an example to fine-tune the model:
-
-```
+### Step 3: Fine-Tune Recommender LLM (`train.py`)
+Fine-tune sequence classification LLMs on user profiles:
+```bash
 CUDA_VISIBLE_DEVICES=0 python train.py \
---output_dir out/amazon-out \
---lr 0.0003 \
---batch_size 8 \
---num_train_epochs 5 \
---seed 42
+  --output_dir out/amazon-out \
+  --lr 0.0003 \
+  --batch_size 8 \
+  --num_train_epochs 5 \
+  --seed 42
 ```
 
-## Scrutability Test
-
-To generate scrutable profiles use
-
+### Step 4: Evaluate Recommender Model (`evaluate.py`)
+Evaluate trained LLMs on the test set:
+```bash
+python evaluate.py \
+  --pretrained_model out/amazon-out-reproduce-profile-title \
+  --profiles user_profiles/amazon_profiles.json \
+  --context_in "user profile" \
+  --context_out "item title"
 ```
+
+### Step 5: Export LaTeX Summary Tables (`generate_latex_table.py`)
+Format evaluation results into publication-ready LaTeX tables:
+```bash
+python generate_latex_table.py \
+  --input results/evaluation_summary_comb.json \
+  --output results/latex_table_comb.tex
+```
+
+---
+
+## 🔍 Mechanistic Interpretability & Perturbation (`user_profile_interpretability.py`)
+
+Analyze user profile semantic space, UMAP clusters, and counterfactual perturbation trajectories:
+
+### 1. UMAP Clustering & Gradient Theme Scoring
+```bash
+python user_profile_interpretability.py \
+  --max-profiles 100 \
+  --theme-method gradient \
+  --device cuda
+```
+
+### 2. Fast Profile Perturbation Trajectory
+Regenerate only the profile perturbation trajectory study (`user_profile_perturbation.png`):
+```bash
+python user_profile_interpretability.py \
+  --max-profiles 100 \
+  --theme-method gradient \
+  --run-perturbation \
+  --device cuda
+```
+
+---
+
+## 🧪 Scrutability & Counterfactual Test
+
+Generate counterfactual profile edits for scrutability evaluation:
+```bash
 python generate_counterfactual_profiles.py
 ```
 
-The few shot prompts used are contained in the file above.
+---
 
-## Evaluation
+## 📜 Citation
 
-```
-python evaluate.py
-```
+If you find this work or code useful, please cite our ACL 2024 paper:
 
-can by use to evaluate the recommender performance of the test set or sampling files. Please be sure to use the correct user profiles and pretrained model during evaluation.
-
-# Code writing assistants
-
-To cite our work, please cite:
-
-```
+```bibtex
 @inproceedings{ramos-etal-2024-transparent,
     title = "Transparent and Scrutable Recommendations Using Natural Language User Profiles",
-    author = "Ramos, Jerome  and
-      Rahmani, Hossein A.  and
-      Wang, Xi  and
-      Fu, Xiao  and
+    author = "Ramos, Jerome and
+      Rahmani, Hossein A. and
+      Wang, Xi and
+      Fu, Xiao and
       Lipani, Aldo",
-    editor = "Ku, Lun-Wei  and
-      Martins, Andre  and
-      Srikumar, Vivek",
     booktitle = "Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
     month = aug,
     year = "2024",
     address = "Bangkok, Thailand",
     publisher = "Association for Computational Linguistics",
     url = "https://aclanthology.org/2024.acl-long.753",
-    pages = "13971--13984",
+    pages = "13971--13984"
 }
 ```
