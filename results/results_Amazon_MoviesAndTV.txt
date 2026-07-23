@@ -1,8 +1,0 @@
-Dataset	Model	MAE	RMSE	MAP	NDCG@10
-Amazon/MoviesAndTV	MostPop	0.9624	1.5047	0.797	0.8978
-Amazon/MoviesAndTV	UserKNN-BM25	0.7067	0.9596	0.9175	0.9423
-Amazon/MoviesAndTV	ItemKNN-Cosine	0.79	1.0453	0.8736	0.9058
-Amazon/MoviesAndTV	BPR	2.9002	3.1193	0.843	0.902
-Amazon/MoviesAndTV	WMF	1.5962	1.9362	0.8922	0.9262
-Amazon/MoviesAndTV	MF	0.6856	0.9254	0.9242	0.9477
-Amazon/MoviesAndTV	NeuMF	3.0376	3.2503	0.797	0.8978
