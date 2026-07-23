@@ -115,18 +115,18 @@ def run_model(eval_method):
             BPR(k=50, max_iter=200, learning_rate=0.001, lambda_reg=0.001, verbose=True),
             WMF(k=50, max_iter=50, learning_rate=0.001, lambda_u=0.01, lambda_v=0.01, verbose=True, seed=123),
             MF(k=10, max_iter=25, learning_rate=0.01, lambda_reg=0.02, use_bias=True, seed=123),
-            MLP(
-                layers=[64, 32, 16, 8],
-                act_fn="tanh",
-                learner="adam",
-                num_epochs=10,
-                batch_size=256,
-                lr=0.001,
-                num_neg=50,
-                seed=123
-            ),
-            HPF(k=50, seed=123, hierarchical=False, name="PF"),
-            VAECF(k=10, autoencoder_structure=[20], act_fn="tanh", likelihood="mult", n_epochs=100, batch_size=100, learning_rate=0.001, beta=1.0, seed=123, use_gpu=True, verbose=True),
+            # MLP(
+            #     layers=[64, 32, 16, 8],
+            #     act_fn="tanh",
+            #     learner="adam",
+            #     num_epochs=10,
+            #     batch_size=256,
+            #     lr=0.001,
+            #     num_neg=50,
+            #     seed=123
+            # ),
+            # HPF(k=50, seed=123, hierarchical=False, name="PF"),
+            # VAECF(k=10, autoencoder_structure=[20], act_fn="tanh", likelihood="mult", n_epochs=100, batch_size=100, learning_rate=0.001, beta=1.0, seed=123, use_gpu=True, verbose=True),
             NeuMF(num_factors=9, layers=[32, 16, 8], act_fn="tanh", num_epochs=5, num_neg=3, batch_size=256, lr=0.001, seed=42, verbose=True)
             ]
 

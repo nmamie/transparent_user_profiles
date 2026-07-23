@@ -22,6 +22,9 @@ parser.add_argument(
     help="Pretrained model name",
 )
 parser.add_argument(
+    "--dataset", type=str, required=False, default="Amazon/MoviesAndTV", help="Dataset name"
+)
+parser.add_argument(
     "--sampling_file", type=str, required=False, help="sampling"
 )
 parser.add_argument(
@@ -53,8 +56,7 @@ set_random_seeds(args.seed)
 
 # Load the dataset
 data_files = {
-    # "test": "datasets/TripAdvisor/test.jsonl",
-    "test": "datasets/Amazon/MoviesAndTV/test.jsonl"
+    "test": f"datasets/{args.dataset}/test.jsonl"
 }
 
 with open(args.profiles) as f:

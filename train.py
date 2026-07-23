@@ -26,6 +26,14 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--dataset", type=str, required=False, default="Amazon/MoviesAndTV", help="Dataset name"
+)
+
+parser.add_argument(
+    "--profiles", type=str, required=False, default="user_profiles/amazon_profiles.json", help="Path to the user profiles JSON file"
+)
+
+parser.add_argument(
     "--context_in", type=str, required=False, default="user profile", choices=["user profile", "review history", "item-review history"], help="input context for the prompt"
 )
 
@@ -54,13 +62,11 @@ set_random_seeds(args.seed)
 # Load the dataset (for demonstration, we'll use the IMDb dataset)
 # Load the dataset
 data_files = {
-    "train": "datasets/Amazon/MoviesAndTV/train.jsonl",
-    "val": "datasets/Amazon/MoviesAndTV/validation.jsonl",
-    # "train": "datasets/TripAdvisor/train.jsonl",
-    # "test": "datasets/TripAdvisor/test.jsonl",
+    "train": f"datasets/{args.dataset}/train.jsonl",
+    "val": f"datasets/{args.dataset}/validation.jsonl"
 }
 
-with open("user_profiles/amazon_profiles.json") as f:
+with open(args.profiles) as f:
     profiles_data = json.load(f)
 
 profiles = {}

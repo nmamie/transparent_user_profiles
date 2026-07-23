@@ -325,7 +325,7 @@ def is_valid_persona(persona: str) -> bool:
 def plot_umap(
     embeddings: np.ndarray, 
     colors: np.ndarray, 
-    out_path: str = "user_profiles_umap.png", 
+    out_path: str = "img/user_profiles_umap.png", 
     profiles: List[str] = None,
     n_neighbors: int = 10,
     min_dist: float = 0.05,
@@ -847,7 +847,7 @@ def compute_global_attribution(
     return word_avg_attrs, word_final_category
 
 
-def plot_global_attribution(word_avg_attrs: dict, word_categories: dict, out_path: str = "global_profile_attribution.png"):
+def plot_global_attribution(word_avg_attrs: dict, word_categories: dict, out_path: str = "img/global_profile_attribution.png"):
     """Plots the top 20 user profile words by global average gradient attribution, colored by category."""
     if not word_avg_attrs:
         print("Warning: No word attributions computed. Skipping global plot.")
@@ -897,22 +897,24 @@ def run_perturbation_study(
     proj: np.ndarray,
     cluster_labels: np.ndarray,
     cluster_themes: List[str] = None,
-    out_path: str = "user_profile_perturbation.png",
+    out_path: str = "img/user_profile_perturbation.png",
     device: str = None
 ):
     """Embeds a baseline (drama-focused) and perturbed (romance-focused) profile, projects them, and plots the trajectory arrow."""
     print("\n[Interpretability] Running profile perturbation study...")
-    baseline_profile = "I enjoy watching movies and TV shows that feature heavy drama, classic films, and tragedies with outstanding acting."
-    perturbed_profile = "I enjoy watching movies and TV shows that feature sweet romance, romantic comedy, and love stories with outstanding acting."
+    baseline_profile = "I like romantic comedies with authentic love stories."
+    perturbed_profile_weak = "I like romantic comedies with lots of action scenes."
+    perturbed_profile_strong = "I like classic masterpieces and heritage movies."
     
     # Embed both profiles
-    embs = embed_profiles(model_path, [baseline_profile, perturbed_profile], batch_size=2, device=device)
+    embs = embed_profiles(model_path, [baseline_profile, perturbed_profile_weak, perturbed_profile_strong], batch_size=3, device=device)
     
     # Project both profiles
     proj_both = reducer.transform(embs)
     proj_baseline = proj_both[0]
-    proj_perturbed = proj_both[1]
-    
+    proj_perturbed_weak = proj_both[1]
+    proj_perturbed_strong = proj_both[2]
+
     fig, ax = plt.subplots(figsize=(9, 7))
     
     # Hide all axis borders and labels
@@ -970,16 +972,18 @@ def run_perturbation_study(
         ax.scatter(proj[:, 0], proj[:, 1], color='#34495E', s=40, alpha=0.25, edgecolors='none')
         
     # Compute vector distance in original latent embedding space
-    emb_dist = float(np.linalg.norm(embs[1] - embs[0]))
+    emb_dist_weak = float(np.linalg.norm(embs[1] - embs[0]))
+    emb_dist_strong = float(np.linalg.norm(embs[2] - embs[0]))
     
     # Plot the baseline and perturbed points prominently
     ax.scatter([proj_baseline[0]], [proj_baseline[1]], color='#F1C40F', marker='*', s=320, edgecolor='black', linewidth=1.8, zorder=7)
-    ax.scatter([proj_perturbed[0]], [proj_perturbed[1]], color='#E67E22', marker='*', s=320, edgecolor='black', linewidth=1.8, zorder=7)
+    ax.scatter([proj_perturbed_weak[0]], [proj_perturbed_weak[1]], color='#E67E22', marker='*', s=320, edgecolor='black', linewidth=1.8, zorder=7)
+    ax.scatter([proj_perturbed_strong[0]], [proj_perturbed_strong[1]], color='#2E8B57', marker='*', s=320, edgecolor='black', linewidth=1.8, zorder=7)
     
-    # Draw arrow from baseline to perturbed point
+    # Draw arrow from baseline to perturbed points
     ax.annotate(
         '', 
-        xy=(proj_perturbed[0], proj_perturbed[1]), 
+        xy=(proj_perturbed_weak[0], proj_perturbed_weak[1]), 
         xytext=(proj_baseline[0], proj_baseline[1]),
         arrowprops=dict(
             arrowstyle="->", 
@@ -991,25 +995,54 @@ def run_perturbation_study(
         zorder=6
     )
     
-    # Add annotation box along the arrow showing perturbation edit & latent shift magnitude Δz
-    mid_x = (proj_baseline[0] + proj_perturbed[0]) / 2.0
-    mid_y = (proj_baseline[1] + proj_perturbed[1]) / 2.0
-    ax.text(
-        mid_x, mid_y + 0.45,
-        f"Edit: + 'sweet romance & love stories'\n(Latent Representation Shift Δz = {emb_dist:.2f})",
-        fontsize=9.5,
-        fontweight="bold",
-        color="#7D3C98",
-        ha="center",
-        va="bottom",
-        bbox=dict(boxstyle="round,pad=0.35", facecolor="#F5EEF8", edgecolor="#7D3C98", alpha=0.95, lw=1.3),
-        zorder=8
+    ax.annotate(
+        '', 
+        xy=(proj_perturbed_strong[0], proj_perturbed_strong[1]), 
+        xytext=(proj_baseline[0], proj_baseline[1]),
+        arrowprops=dict(
+            arrowstyle="->", 
+            color="#2C3E50", 
+            lw=3.0, 
+            ls="--",
+            connectionstyle="arc3,rad=0.0"
+        ),
+        zorder=6
     )
     
-    # Add text labels next to the stars
-    ax.text(proj_baseline[0] - 0.25, proj_baseline[1] - 0.45, "Baseline Profile\n(Heavy Drama & Tragedies)", fontsize=9.5, fontweight='bold', color='#D68910', ha='center', va='top', bbox=dict(boxstyle="round,pad=0.3", facecolor="#FEF9E7", edgecolor="#D68910", alpha=0.9, lw=1.1), zorder=8)
-    ax.text(proj_perturbed[0] + 0.25, proj_perturbed[1] - 0.45, "Perturbed Profile\n(+ Sweet Romance & Comedies)", fontsize=9.5, fontweight='bold', color='#BA4A00', ha='center', va='top', bbox=dict(boxstyle="round,pad=0.3", facecolor="#FBEEE6", edgecolor="#BA4A00", alpha=0.9, lw=1.1), zorder=8)
+    # # Add annotation box along the arrow showing perturbation edit & latent shift magnitude Δz
+    # mid_x = (proj_baseline[0] + proj_perturbed_weak[0]) / 2.0
+    # mid_y = (proj_baseline[1] + proj_perturbed_weak[1]) / 2.0
+    # ax.text(
+    #     mid_x, mid_y + 0.45,
+    #     f"Edit: + 'hilarious comedy & satire'\n(Latent Representation Shift Δz = {emb_dist_comedy:.2f})",
+    #     fontsize=9.5,
+    #     fontweight="bold",
+    #     color="#7D3C98",
+    #     ha="center",
+    #     va="bottom",
+    #     bbox=dict(boxstyle="round,pad=0.35", facecolor="#F5EEF8", edgecolor="#7D3C98", alpha=0.95, lw=1.3),
+    #     zorder=8
+    # )
     
+    # mid_x2 = (proj_baseline[0] + proj_perturbed_strong[0]) / 2.0
+    # mid_y2 = (proj_baseline[1] + proj_perturbed_strong[1]) / 2.0
+    # ax.text(
+    #     mid_x2, mid_y2 + 0.45,
+    #     f"Edit: + 'romantic comedies & love stories'\n(Latent Representation Shift Δz = {emb_dist_strong:.2f})",
+    #     fontsize=9.5,
+    #     fontweight="bold",
+    #     color="#2E8B57",
+    #     ha="center",
+    #     va="bottom",
+    #     bbox=dict(boxstyle="round,pad=0.35", facecolor="#E9F7EF", edgecolor="#2E8B57", alpha=0.95, lw=1.3),
+    #     zorder=8
+    # )
+    
+    # Add text labels next to the stars
+    ax.text(proj_baseline[0] - 0.25, proj_baseline[1] - 0.45, "Baseline Profile", fontsize=9.5, fontweight='bold', color='#D68910', ha='center', va='top', bbox=dict(boxstyle="round,pad=0.3", facecolor="#FEF9E7", edgecolor="#D68910", alpha=0.9, lw=1.1), zorder=8)
+    ax.text(proj_perturbed_weak[0] + 0.25, proj_perturbed_weak[1] - 0.45, "Perturbed Profile\n(Weak)", fontsize=9.5, fontweight='bold', color='#BA4A00', ha='center', va='top', bbox=dict(boxstyle="round,pad=0.3", facecolor="#FBEEE6", edgecolor="#BA4A00", alpha=0.9, lw=1.1), zorder=8)
+    ax.text(proj_perturbed_strong[0] + 0.25, proj_perturbed_strong[1] - 0.45, "Perturbed Profile\n(Strong)", fontsize=9.5, fontweight='bold', color='#2E8B57', ha='center', va='top', bbox=dict(boxstyle="round,pad=0.3", facecolor="#E9F7EF", edgecolor="#2E8B57", alpha=0.9, lw=1.1), zorder=8)
+
     ax.set_title("User Profile Perturbation and Representation Shift", fontsize=14, pad=20, fontweight="bold")
     
     plt.tight_layout()
@@ -1022,7 +1055,7 @@ def visualize_user_profiles(
     profiles: List[str],
     reviews_concat: List[str],
     model_path: str = DEFAULT_MODEL_PATH,
-    out_path: str = "user_profiles_umap.png",
+    out_path: str = "img/user_profiles_umap.png",
     batch_size: int = 32,
     device: str = None,
     n_neighbors: int = 10,
@@ -1082,7 +1115,7 @@ def interpret_user_profile_contribution(
     model_path: str,
     profile: str,
     item_title: str,
-    out_path: str = "user_profile_attribution.png",
+    out_path: str = "img/user_profile_attribution.png",
     device: str = None
 ):
     """Calculates token-level feature attribution using nnsight.
@@ -1228,7 +1261,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", type=str, default=DEFAULT_MODEL_PATH, help="Path to local causal LM model")
     parser.add_argument("--profiles-file", type=str, default=DEFAULT_PROFILES_FILE, help="JSON file with user profiles")
-    parser.add_argument("--out-path", type=str, default="user_profiles_umap.png", help="Output image path")
+    parser.add_argument("--out-path", type=str, default="img/user_profiles_umap.png", help="Output image path")
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size for nnsight model tracing")
     parser.add_argument("--max-profiles", type=int, default=None, help="Maximum number of profiles to visualize")
     parser.add_argument("--device", type=str, default=None, help="Device to run nnsight model on ('cuda', 'cpu', etc.)")
@@ -1258,7 +1291,7 @@ if __name__ == "__main__":
     parser.add_argument("--interpret-item", type=str, 
                         default="Tarzan (Walt Disney) [VHS]", 
                         help="Specific item title to run gradient attribution case study on")
-    parser.add_argument("--attribution-out", type=str, default="user_profile_attribution.png", 
+    parser.add_argument("--attribution-out", type=str, default="img/user_profile_attribution.png", 
                         help="Output image path for attribution case study")
     args = parser.parse_args()
 
@@ -1361,7 +1394,7 @@ if __name__ == "__main__":
                 device=args.device,
                 max_examples=args.global_attr_max
             )
-            plot_global_attribution(word_attrs, word_counts, out_path="global_profile_attribution.png")
+            plot_global_attribution(word_attrs, word_counts, out_path="img/global_profile_attribution.png")
         except Exception as e:
             print(f"Warning: Global attribution study failed: {e}")
 
@@ -1374,21 +1407,22 @@ if __name__ == "__main__":
                 proj=proj,
                 cluster_labels=cluster_labels,
                 cluster_themes=cluster_themes,
-                out_path="user_profile_perturbation.png",
+                out_path="img/user_profile_perturbation.png",
                 device=args.device
             )
         except Exception as e:
             print(f"Warning: Perturbation study failed: {e}")
 
     # Run case study attribution
-    try:
-        interpret_user_profile_contribution(
-            model_path=args.model_path,
-            profile=args.interpret_profile,
-            item_title=args.interpret-item if hasattr(args, "interpret-item") else getattr(args, "interpret_item"),
-            out_path=args.attribution_out,
-            device=args.device
-        )
-    except Exception as e:
-        print(f"Warning: Attribution case study failed: {e}")
+    if args.interpret_profile and args.interpret_item:
+        try:
+            interpret_user_profile_contribution(
+                model_path=args.model_path,
+                profile=args.interpret_profile,
+                item_title=args.interpret-item if hasattr(args, "interpret-item") else getattr(args, "interpret_item"),
+                out_path=args.attribution_out,
+                device=args.device
+            )
+        except Exception as e:
+            print(f"Warning: Attribution case study failed: {e}")
 
