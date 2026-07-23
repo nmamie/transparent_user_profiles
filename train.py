@@ -252,7 +252,16 @@ early_stopping_callback = EarlyStoppingCallback(
     early_stopping_threshold=0.0  # Minimum improvement to qualify as an improvement.
 )
 
-results_dir = Path("out") / args.output_dir
+# Ensure base output and results directories exist
+os.makedirs("out", exist_ok=True)
+os.makedirs("results", exist_ok=True)
+
+user_output_path = Path(args.output_dir)
+if user_output_path.is_absolute() or str(user_output_path).startswith("out/") or str(user_output_path).startswith("out\\"):
+    results_dir = user_output_path
+else:
+    results_dir = Path("out") / user_output_path
+
 results_dir.mkdir(parents=True, exist_ok=True)
 
 # Define training arguments and set up Trainer

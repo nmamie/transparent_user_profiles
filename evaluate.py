@@ -51,6 +51,17 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+import os
+os.makedirs("results", exist_ok=True)
+if args.output:
+    output_dir = os.path.dirname(args.output)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+if args.summary_file:
+    summary_dir = os.path.dirname(args.summary_file)
+    if summary_dir:
+        os.makedirs(summary_dir, exist_ok=True)
+
 from utils import set_random_seeds
 set_random_seeds(args.seed)
 

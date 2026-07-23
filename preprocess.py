@@ -16,12 +16,13 @@ import math
 
 
 parser = argparse.ArgumentParser(description="Find top k values in features")
+parser.add_argument("--dataset", type=str, default="Amazon/MoviesAndTV", help="Dataset name (e.g. Amazon/MoviesAndTV or TripAdvisor)")
 parser.add_argument("--k", type=int, default=5, help="How many features to extract.")
 parser.add_argument(
     "--input_directory",
     type=str,
-    default="datasets/Amazon/MoviesAndTV",
-    help="The dataset to use.",
+    default="",
+    help="The dataset input directory to use.",
 )
 parser.add_argument(
     "--pickled_reviews", type=str, default="reviews.pickle", help="pickled review data."
@@ -30,11 +31,26 @@ parser.add_argument("--items", type=str, default="item.json", help="item metadat
 parser.add_argument(
     "--output",
     type=str,
-    default="amazon_k_best_features.json",
-    help="output file.",
+    default="",
+    help="output file path.",
 )
 
 args = parser.parse_args()
+
+# Resolve dataset paths if defaults are empty
+if not args.input_directory:
+    args.input_directory = f"datasets/{args.dataset}"
+
+if not args.output:
+    if "TripAdvisor" in args.dataset:
+        args.output = "user_profiles/tripadvisor_k_best_features.json"
+    else:
+        args.output = "user_profiles/amazon_k_best_features.json"
+
+# Ensure output parent directory exists
+out_dir = os.path.dirname(args.output)
+if out_dir:
+    os.makedirs(out_dir, exist_ok=True)
 
 random.seed(0)
 torch.manual_seed(0)
