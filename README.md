@@ -121,6 +121,26 @@ python generate_latex_table.py \
 
 ---
 
+## 🚀 Extended Experiments (Beyond Basic Reproducibility)
+
+In addition to basic single-model reproduction, shell scripts are provided to automate batch context ablation experiments and multi-seed stability evaluations:
+
+### 1. Batch Context Ablation Experiments (`train_comb.sh`)
+Automates training and evaluation across all combinations of input contexts (`user profile`, `review history`, `item-review history`) and output formats (`item title`, `item title and description`) for Amazon Movies & TV and TripAdvisor. Upon completion, it automatically compiles the aggregated LaTeX results table:
+
+```bash
+bash train_comb.sh
+```
+
+### 2. Multi-Seed Stability & Robustness (`train_seeds.sh`)
+Trains and evaluates models across 5 distinct random initialization seeds (seeds 37, 38, 39, 40, 41) to measure model variance, standard deviation, and stability across random seeds:
+
+```bash
+bash train_seeds.sh
+```
+
+---
+
 ## 🔍 Mechanistic Interpretability & Perturbation (`user_profile_interpretability.py`)
 
 Analyze user profile semantic space, UMAP clusters, and counterfactual perturbation trajectories:
