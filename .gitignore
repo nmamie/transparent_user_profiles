@@ -9,3 +9,4 @@ datasets/Amazon/MoviesAndTV/user_items.jsonl
 src/
 datasets/Amazon/MoviesAndTV/reviews.pickle
 generate_latex_table.py
+cache/

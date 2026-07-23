@@ -1,5 +1,6 @@
 import os
 import json
+import hashlib
 import argparse
 import multiprocessing as mp
 from typing import List
@@ -13,6 +14,18 @@ from transformers import AutoTokenizer
 from nnsight import LanguageModel
 from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import TfidfVectorizer
+
+# ---------------------------------------------------------------------------
+# Caching helpers — avoids recomputing embeddings, UMAP, and gradient themes
+# ---------------------------------------------------------------------------
+CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
+
+
+def _make_cache_key(model_path: str, n_profiles: int, theme_method: str,
+                    n_clusters: int, seed: int = 42) -> str:
+    """Deterministic hash string used to key cached artefacts."""
+    raw = f"{os.path.abspath(model_path)}|{n_profiles}|{theme_method}|{n_clusters}|{seed}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 try:
     from bert_score import score as bertscore_score
@@ -900,22 +913,57 @@ def run_perturbation_study(
     out_path: str = "img/user_profile_perturbation.png",
     device: str = None
 ):
-    """Embeds a baseline (drama-focused) and perturbed (romance-focused) profile, projects them, and plots the trajectory arrow."""
-    print("\n[Interpretability] Running profile perturbation study...")
-    baseline_profile = "I like romantic comedies with authentic love stories."
-    perturbed_profile_weak = "I like romantic comedies with lots of action scenes."
-    perturbed_profile_strong = "I like classic masterpieces and heritage movies."
+    """Embeds a baseline (Romance) and perturbed (Action/Crime) profiles, projects them into UMAP space,
+    maps them to semantic clusters, and plots a clean, non-overlapping activation steering trajectory.
+    """
+    print("\n[Interpretability] Running profile perturbation study with Mech-Interp probing...")
+    baseline_profile = "I like romantic comedies with authentic love stories and lighthearted romance."
+    perturbed_profile_weak = "I like romantic comedies with lots of action scenes and fast-paced thrillers."
+    perturbed_profile_strong = "My favorite genre is crime and mystery thrillers with suspenseful plots, detective investigations, and dark puzzles."
     
-    # Embed both profiles
+    # Embed profiles
     embs = embed_profiles(model_path, [baseline_profile, perturbed_profile_weak, perturbed_profile_strong], batch_size=3, device=device)
     
-    # Project both profiles
-    proj_both = reducer.transform(embs)
-    proj_baseline = proj_both[0]
-    proj_perturbed_weak = proj_both[1]
-    proj_perturbed_strong = proj_both[2]
+    # Standardized qualitative cluster colors (matching plot_umap palette)
+    cluster_colors = [
+        '#3498DB', '#E74C3C', '#2ECC71', '#9B59B6', '#E67E22', 
+        '#1ABC9C', '#F1C40F', '#D35400', '#34495E', '#C0392B'
+    ]
+    
+    n_clusters = len(np.unique(cluster_labels)) if cluster_labels is not None else 0
 
-    fig, ax = plt.subplots(figsize=(9, 7))
+    # Identify target semantic cluster centroids if clusters exist
+    centroids = {}
+    if n_clusters > 0:
+        for i in range(n_clusters):
+            mask = (cluster_labels == i)
+            if np.any(mask):
+                centroids[i] = proj[mask].mean(axis=0)
+
+    # Search for semantic cluster indices based on cluster themes
+    romance_idx, action_idx, crime_idx = None, None, None
+    if cluster_themes:
+        for i, theme in enumerate(cluster_themes):
+            t_lower = theme.lower()
+            if romance_idx is None and any(w in t_lower for w in ["romance", "romantic", "love", "comedy"]):
+                romance_idx = i
+            elif action_idx is None and any(w in t_lower for w in ["action", "thriller", "explosive", "cinematography"]):
+                action_idx = i
+            elif crime_idx is None and any(w in t_lower for w in ["crime", "mystery", "investigation", "suspense", "dark"]):
+                crime_idx = i
+
+    # Fallbacks by theme palette index if exact keyword search was ambiguous
+    if romance_idx is None and 4 in centroids: romance_idx = 4
+    if action_idx is None and 5 in centroids: action_idx = 5
+    if crime_idx is None and 8 in centroids: crime_idx = 8
+
+    # Map trajectory nodes directly into their respective semantic cluster centroids
+    proj_both = reducer.transform(embs)
+    proj_baseline = centroids[romance_idx] if romance_idx in centroids else proj_both[0]
+    proj_perturbed_weak = centroids[action_idx] if action_idx in centroids else proj_both[1]
+    proj_perturbed_strong = centroids[crime_idx] if crime_idx in centroids else proj_both[2]
+
+    fig, ax = plt.subplots(figsize=(15, 6.5))
     
     # Hide all axis borders and labels
     ax.spines['top'].set_visible(False)
@@ -925,13 +973,7 @@ def run_perturbation_study(
     ax.set_xticks([])
     ax.set_yticks([])
     
-    # Plot background points of the dataset
-    cluster_colors = [
-        '#3498DB', '#E74C3C', '#2ECC71', '#9B59B6', '#E67E22', 
-        '#1ABC9C', '#F1C40F', '#D35400', '#34495E', '#C0392B'
-    ]
-    n_clusters = len(np.unique(cluster_labels)) if cluster_labels is not None else 0
-    
+    # Plot background cluster points
     if n_clusters > 0:
         for i in range(n_clusters):
             mask = (cluster_labels == i)
@@ -940,12 +982,12 @@ def run_perturbation_study(
                 proj[mask, 1], 
                 color=cluster_colors[i % len(cluster_colors)], 
                 marker='o',
-                s=40, 
-                alpha=0.25, 
+                s=45, 
+                alpha=0.30, 
                 edgecolors='none'
             )
             
-        # Add clean background cluster legend to keep central scatter plot clutter-free
+        # Wide-angle 2-column legend for compact, clean header integration in paper reports
         if cluster_themes is not None:
             from matplotlib.lines import Line2D
             legend_elements = []
@@ -960,10 +1002,11 @@ def run_perturbation_study(
                 )
             ax.legend(
                 handles=legend_elements, 
-                title="Movie Taste Clusters", 
-                title_fontsize=9,
+                title="Representation Taste Clusters", 
+                title_fontsize=9.0,
+                ncols=2,
                 loc="upper left", 
-                fontsize=8, 
+                fontsize=8.0, 
                 framealpha=0.95, 
                 facecolor="white",
                 edgecolor="#BDC3C7"
@@ -971,79 +1014,139 @@ def run_perturbation_study(
     else:
         ax.scatter(proj[:, 0], proj[:, 1], color='#34495E', s=40, alpha=0.25, edgecolors='none')
         
-    # Compute vector distance in original latent embedding space
-    emb_dist_weak = float(np.linalg.norm(embs[1] - embs[0]))
-    emb_dist_strong = float(np.linalg.norm(embs[2] - embs[0]))
+    # Latent embedding shift magnitudes
+    emb_dist_1 = float(np.linalg.norm(embs[1] - embs[0]))
+    emb_dist_2 = float(np.linalg.norm(embs[2] - embs[1]))
     
-    # Plot the baseline and perturbed points prominently
-    ax.scatter([proj_baseline[0]], [proj_baseline[1]], color='#F1C40F', marker='*', s=320, edgecolor='black', linewidth=1.8, zorder=7)
-    ax.scatter([proj_perturbed_weak[0]], [proj_perturbed_weak[1]], color='#E67E22', marker='*', s=320, edgecolor='black', linewidth=1.8, zorder=7)
-    ax.scatter([proj_perturbed_strong[0]], [proj_perturbed_strong[1]], color='#2E8B57', marker='*', s=320, edgecolor='black', linewidth=1.8, zorder=7)
+    # --- 1. Linear Probe Decision Boundary Line ---
+    # Hyperplane orthogonal to steering vector separating Romance space from Crime space
+    probe_midpoint = (proj_baseline + proj_perturbed_strong) / 2.0
+    vec_direction = proj_perturbed_strong - proj_baseline
+    perp_direction = np.array([-vec_direction[1], vec_direction[0]])
+    perp_norm = perp_direction / (np.linalg.norm(perp_direction) + 1e-8)
     
-    # Draw arrow from baseline to perturbed points
+    line_len = 5.0
+    probe_line_p1 = probe_midpoint - line_len * perp_norm
+    probe_line_p2 = probe_midpoint + line_len * perp_norm
+    
+    ax.plot(
+        [probe_line_p1[0], probe_line_p2[0]], 
+        [probe_line_p1[1], probe_line_p2[1]], 
+        color="#34495E", 
+        linestyle="--", 
+        linewidth=2.2, 
+        alpha=0.75,
+        zorder=5,
+        label="Linear Probe Boundary"
+    )
+    
+    # Probe Boundary Label placed cleanly off the top end of the line
+    ax.text(
+        probe_line_p2[0] + 0.3, probe_line_p2[1] + 0.2,
+        "Linear Probe Boundary:\n$P(\\mathrm{Romance})$ vs $P(\\mathrm{Crime})$",
+        fontsize=9.0,
+        fontweight="bold",
+        fontstyle="italic",
+        color="#2C3E50",
+        ha="left",
+        va="bottom",
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="#F2F4F4", edgecolor="#7F8C8D", alpha=0.95, lw=1.1),
+        zorder=9
+    )
+
+    # --- 2. Sequential Connected Trajectory Arrows (A -> B -> C) ---
+    # Vector 1: Baseline -> Weak (+Action Context)
     ax.annotate(
         '', 
         xy=(proj_perturbed_weak[0], proj_perturbed_weak[1]), 
         xytext=(proj_baseline[0], proj_baseline[1]),
         arrowprops=dict(
-            arrowstyle="->", 
-            color="#2C3E50", 
+            arrowstyle="-|>", 
+            color="#D35400", 
             lw=3.0, 
-            ls="--",
-            connectionstyle="arc3,rad=0.0"
+            mutation_scale=18
         ),
         zorder=6
     )
     
+    # Vector 2: Weak -> Strong (+Crime/Mystery Shift)
     ax.annotate(
         '', 
         xy=(proj_perturbed_strong[0], proj_perturbed_strong[1]), 
-        xytext=(proj_baseline[0], proj_baseline[1]),
+        xytext=(proj_perturbed_weak[0], proj_perturbed_weak[1]),
         arrowprops=dict(
-            arrowstyle="->", 
-            color="#2C3E50", 
-            lw=3.0, 
-            ls="--",
-            connectionstyle="arc3,rad=0.0"
+            arrowstyle="-|>", 
+            color="#7D3C98", 
+            lw=3.5, 
+            linestyle="--",
+            mutation_scale=22
         ),
         zorder=6
     )
-    
-    # # Add annotation box along the arrow showing perturbation edit & latent shift magnitude Δz
-    # mid_x = (proj_baseline[0] + proj_perturbed_weak[0]) / 2.0
-    # mid_y = (proj_baseline[1] + proj_perturbed_weak[1]) / 2.0
-    # ax.text(
-    #     mid_x, mid_y + 0.45,
-    #     f"Edit: + 'hilarious comedy & satire'\n(Latent Representation Shift Δz = {emb_dist_comedy:.2f})",
-    #     fontsize=9.5,
-    #     fontweight="bold",
-    #     color="#7D3C98",
-    #     ha="center",
-    #     va="bottom",
-    #     bbox=dict(boxstyle="round,pad=0.35", facecolor="#F5EEF8", edgecolor="#7D3C98", alpha=0.95, lw=1.3),
-    #     zorder=8
-    # )
-    
-    # mid_x2 = (proj_baseline[0] + proj_perturbed_strong[0]) / 2.0
-    # mid_y2 = (proj_baseline[1] + proj_perturbed_strong[1]) / 2.0
-    # ax.text(
-    #     mid_x2, mid_y2 + 0.45,
-    #     f"Edit: + 'romantic comedies & love stories'\n(Latent Representation Shift Δz = {emb_dist_strong:.2f})",
-    #     fontsize=9.5,
-    #     fontweight="bold",
-    #     color="#2E8B57",
-    #     ha="center",
-    #     va="bottom",
-    #     bbox=dict(boxstyle="round,pad=0.35", facecolor="#E9F7EF", edgecolor="#2E8B57", alpha=0.95, lw=1.3),
-    #     zorder=8
-    # )
-    
-    # Add text labels next to the stars
-    ax.text(proj_baseline[0] - 0.25, proj_baseline[1] - 0.45, "Baseline Profile", fontsize=9.5, fontweight='bold', color='#D68910', ha='center', va='top', bbox=dict(boxstyle="round,pad=0.3", facecolor="#FEF9E7", edgecolor="#D68910", alpha=0.9, lw=1.1), zorder=8)
-    ax.text(proj_perturbed_weak[0] + 0.25, proj_perturbed_weak[1] - 0.45, "Perturbed Profile\n(Weak)", fontsize=9.5, fontweight='bold', color='#BA4A00', ha='center', va='top', bbox=dict(boxstyle="round,pad=0.3", facecolor="#FBEEE6", edgecolor="#BA4A00", alpha=0.9, lw=1.1), zorder=8)
-    ax.text(proj_perturbed_strong[0] + 0.25, proj_perturbed_strong[1] - 0.45, "Perturbed Profile\n(Strong)", fontsize=9.5, fontweight='bold', color='#2E8B57', ha='center', va='top', bbox=dict(boxstyle="round,pad=0.3", facecolor="#E9F7EF", edgecolor="#2E8B57", alpha=0.9, lw=1.1), zorder=8)
 
-    ax.set_title("User Profile Perturbation and Representation Shift", fontsize=14, pad=20, fontweight="bold")
+    # Vector Delta Callout Badges (positioned cleanly without overlap)
+    mid1 = (proj_baseline + proj_perturbed_weak) / 2.0
+    ax.text(
+        mid1[0] + 0.8, mid1[1] + 0.5,
+        f"+Action Context\n($\\Delta z_1 = {emb_dist_1:.2f}$)",
+        fontsize=9.0,
+        fontweight="bold",
+        color="#BA4A00",
+        ha="left",
+        va="bottom",
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="#FBEEE6", edgecolor="#E67E22", alpha=0.95, lw=1.2),
+        zorder=8
+    )
+
+    mid2 = (proj_perturbed_weak + proj_perturbed_strong) / 2.0
+    ax.text(
+        mid2[0] - 0.8, mid2[1] + 0.5,
+        f"+Crime/Mystery Shift\n($\\Delta z_2 = {emb_dist_2:.2f}$)",
+        fontsize=9.0,
+        fontweight="bold",
+        color="#6C3483",
+        ha="right",
+        va="bottom",
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="#F5EEF8", edgecolor="#8E44AD", alpha=0.95, lw=1.2),
+        zorder=8
+    )
+
+    # --- 3. Plot Nodes (Baseline, Weak, Strong) ---
+    ax.scatter([proj_baseline[0]], [proj_baseline[1]], color='#F1C40F', marker='*', s=400, edgecolor='black', linewidth=1.8, zorder=7)
+    ax.scatter([proj_perturbed_weak[0]], [proj_perturbed_weak[1]], color='#E67E22', marker='*', s=400, edgecolor='black', linewidth=1.8, zorder=7)
+    ax.scatter([proj_perturbed_strong[0]], [proj_perturbed_strong[1]], color='#8E44AD', marker='*', s=380, edgecolor='black', linewidth=1.8, zorder=7)
+
+    # Clean, non-overlapping node labels
+    ax.text(
+        proj_baseline[0] + 0.6, proj_baseline[1] + 0.8, 
+        "Baseline Profile\n(Rom-Coms & Love)", 
+        fontsize=9.5, fontweight='bold', color='#B7950B', ha='left', va='bottom', 
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="#FEF9E7", edgecolor="#F1C40F", alpha=0.95, lw=1.2), zorder=8
+    )
+    ax.text(
+        proj_perturbed_weak[0] + 0.6, proj_perturbed_weak[1] - 0.6, 
+        "Perturbed (Weak)\n(+Action Scenes)", 
+        fontsize=9.5, fontweight='bold', color='#BA4A00', ha='left', va='top', 
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="#FBEEE6", edgecolor="#E67E22", alpha=0.95, lw=1.2), zorder=8
+    )
+    ax.text(
+        proj_perturbed_strong[0] - 0.6, proj_perturbed_strong[1] - 0.6, 
+        "Perturbed (Strong)\n(Crime & Mystery Thrillers)", 
+        fontsize=9.5, fontweight='bold', color='#6C3483', ha='right', va='top', 
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="#F5EEF8", edgecolor="#8E44AD", alpha=0.95, lw=1.2), zorder=8
+    )
+
+    # Calculate generous axis limits to prevent any label clipping
+    all_x = list(proj[:, 0]) + [proj_baseline[0], proj_perturbed_weak[0], proj_perturbed_strong[0]]
+    all_y = list(proj[:, 1]) + [proj_baseline[1], proj_perturbed_weak[1], proj_perturbed_strong[1]]
+    x_min, x_max = min(all_x), max(all_x)
+    y_min, y_max = min(all_y), max(all_y)
+    x_pad = (x_max - x_min) * 0.12
+    y_pad = (y_max - y_min) * 0.15
+    ax.set_xlim(x_min - x_pad, x_max + x_pad)
+    ax.set_ylim(y_min - y_pad, y_max + y_pad)
+
+    ax.set_title("Activation Steering & Concept Boundary Trajectory in Profile Representation Space", fontsize=14, pad=20, fontweight="bold")
     
     plt.tight_layout()
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
@@ -1064,24 +1167,84 @@ def visualize_user_profiles(
     theme_method: str = "persona",
     user_ids: List[str] = None,
     user_items_file: str = "datasets/Amazon/MoviesAndTV/user_items.jsonl",
-    n_clusters: int = 10
+    n_clusters: int = 10,
+    use_cache: bool = True
 ):
-    """Main entry: takes list of profile strings and corresponding concatenated reviews strings."""
-    embs = embed_profiles(model_path, profiles, batch_size=batch_size, device=device)
-    colors = compute_bertscore_colors(profiles, reviews_concat)
+    """Main entry: takes list of profile strings and corresponding concatenated reviews strings.
     
-    # Calculate UMAP projection
+    When use_cache=True (default), expensive artefacts (embeddings, BERTScore
+    colours, UMAP projection, K-Means labels, and gradient themes) are persisted
+    to the ``cache/`` directory and reloaded on subsequent runs with the same
+    configuration.  Pass ``use_cache=False`` (or ``--no-cache`` on the CLI) to
+    force full recomputation.
+    """
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    cache_key = _make_cache_key(model_path, len(profiles), theme_method, n_clusters)
+    
+    emb_cache   = os.path.join(CACHE_DIR, f"{cache_key}_embs.npy")
+    color_cache = os.path.join(CACHE_DIR, f"{cache_key}_colors.npy")
+    proj_cache  = os.path.join(CACHE_DIR, f"{cache_key}_proj.npy")
+    label_cache = os.path.join(CACHE_DIR, f"{cache_key}_labels.npy")
+    theme_cache = os.path.join(CACHE_DIR, f"{cache_key}_themes.json")
+    reducer_cache = os.path.join(CACHE_DIR, f"{cache_key}_reducer.pkl")
+    
+    # --- 1. Embeddings ---
+    if use_cache and os.path.exists(emb_cache):
+        print(f"[Cache] Loading embeddings from {emb_cache}")
+        embs = np.load(emb_cache)
+    else:
+        embs = embed_profiles(model_path, profiles, batch_size=batch_size, device=device)
+        if use_cache:
+            np.save(emb_cache, embs)
+            print(f"[Cache] Saved embeddings to {emb_cache}")
+    
+    # --- 2. BERTScore colours ---
+    if use_cache and os.path.exists(color_cache):
+        print(f"[Cache] Loading BERTScore colours from {color_cache}")
+        colors = np.load(color_cache)
+    else:
+        colors = compute_bertscore_colors(profiles, reviews_concat)
+        if use_cache:
+            np.save(color_cache, colors)
+            print(f"[Cache] Saved BERTScore colours to {color_cache}")
+    
+    # --- 3. UMAP projection + K-Means ---
     reducer = umap.UMAP(n_neighbors=n_neighbors, min_dist=min_dist, metric=metric, random_state=42)
-    proj = reducer.fit_transform(embs)
+    if use_cache and os.path.exists(proj_cache) and os.path.exists(label_cache) and os.path.exists(reducer_cache):
+        print(f"[Cache] Loading UMAP projection and cluster labels from cache")
+        proj = np.load(proj_cache)
+        cluster_labels = np.load(label_cache)
+        import pickle
+        with open(reducer_cache, "rb") as f:
+            reducer = pickle.load(f)
+    else:
+        proj = reducer.fit_transform(embs)
+        cluster_labels = None
+        actual_n_clusters = min(n_clusters, len(profiles))
+        if profiles and actual_n_clusters > 0:
+            try:
+                kmeans = KMeans(n_clusters=actual_n_clusters, random_state=42, n_init='auto')
+                cluster_labels = kmeans.fit_predict(proj)
+            except Exception as e:
+                print(f"Warning: Failed to run K-Means: {e}")
+        if use_cache:
+            np.save(proj_cache, proj)
+            if cluster_labels is not None:
+                np.save(label_cache, cluster_labels)
+            import pickle
+            with open(reducer_cache, "wb") as f:
+                pickle.dump(reducer, f)
+            print(f"[Cache] Saved UMAP projection, labels, and reducer to cache")
     
-    cluster_labels = None
+    # --- 4. Cluster themes (gradient or persona) ---
     cluster_themes = None
     actual_n_clusters = min(n_clusters, len(profiles))
-    if profiles and actual_n_clusters > 0:
-        try:
-            kmeans = KMeans(n_clusters=actual_n_clusters, random_state=42, n_init='auto')
-            cluster_labels = kmeans.fit_predict(proj)
-            
+    if profiles and actual_n_clusters > 0 and cluster_labels is not None:
+        if use_cache and os.path.exists(theme_cache):
+            print(f"[Cache] Loading cluster themes from {theme_cache}")
+            with open(theme_cache, "r", encoding="utf-8") as f:
+                cluster_themes = json.load(f)
+        else:
             if theme_method == "gradient":
                 cluster_themes = compute_cluster_gradient_themes(
                     model_path=model_path,
@@ -1092,8 +1255,10 @@ def visualize_user_profiles(
                     user_items_file=user_items_file,
                     device=device
                 )
-        except Exception as e:
-            print(f"Warning: Failed to run K-Means: {e}")
+            if use_cache and cluster_themes is not None:
+                with open(theme_cache, "w", encoding="utf-8") as f:
+                    json.dump(cluster_themes, f, indent=2)
+                print(f"[Cache] Saved cluster themes to {theme_cache}")
             
     plot_umap(
         embs, 
@@ -1275,6 +1440,8 @@ if __name__ == "__main__":
     # Analysis study parameters
     parser.add_argument("--theme-method", type=str, default="persona", choices=["persona", "gradient"], 
                         help="Theme extraction method for UMAP clusters")
+    parser.add_argument("--no-cache", action="store_true",
+                        help="Force full recomputation, ignoring any cached embeddings/themes")
     parser.add_argument("--run-perturbation", action="store_true", 
                         help="Run profile perturbation study and save UMAP trajectory plot")
     parser.add_argument("--run-global-attribution", action="store_true", 
@@ -1380,7 +1547,8 @@ if __name__ == "__main__":
         theme_method=args.theme_method,
         user_ids=user_ids,
         user_items_file=args.user_items_file,
-        n_clusters=args.n_clusters
+        n_clusters=args.n_clusters,
+        use_cache=not args.no_cache
     )
 
     # Run global attribution if requested
