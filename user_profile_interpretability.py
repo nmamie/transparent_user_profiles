@@ -21,10 +21,16 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 
 
-def _make_cache_key(model_path: str, n_profiles: int, theme_method: str,
-                    n_clusters: int, seed: int = 42) -> str:
-    """Deterministic hash string used to key cached artefacts."""
-    raw = f"{os.path.abspath(model_path)}|{n_profiles}|{theme_method}|{n_clusters}|{seed}"
+def _make_data_cache_key(model_path: str, n_profiles: int,
+                         n_clusters: int, seed: int = 42) -> str:
+    """Cache key for embeddings, BERTScore, UMAP, and K-Means (theme-independent)."""
+    raw = f"{os.path.abspath(model_path)}|{n_profiles}|{n_clusters}|{seed}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _make_theme_cache_key(data_key: str, theme_method: str) -> str:
+    """Cache key for cluster themes (extends the data key with theme method)."""
+    raw = f"{data_key}|{theme_method}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 try:
@@ -987,7 +993,7 @@ def run_perturbation_study(
                 edgecolors='none'
             )
             
-        # Wide-angle 2-column legend for compact, clean header integration in paper reports
+        # Wide-angle 2-column legend OUTSIDE the plot area to avoid obscuring data
         if cluster_themes is not None:
             from matplotlib.lines import Line2D
             legend_elements = []
@@ -1003,13 +1009,17 @@ def run_perturbation_study(
             ax.legend(
                 handles=legend_elements, 
                 title="Representation Taste Clusters", 
-                title_fontsize=9.0,
+                title_fontsize=8.5,
                 ncols=2,
-                loc="upper left", 
-                fontsize=8.0, 
+                loc="upper center", 
+                bbox_to_anchor=(0.5, 1.02),
+                fontsize=7.5, 
                 framealpha=0.95, 
                 facecolor="white",
-                edgecolor="#BDC3C7"
+                edgecolor="#BDC3C7",
+                borderpad=0.4,
+                columnspacing=1.0,
+                handletextpad=0.4
             )
     else:
         ax.scatter(proj[:, 0], proj[:, 1], color='#34495E', s=40, alpha=0.25, edgecolors='none')
@@ -1018,8 +1028,16 @@ def run_perturbation_study(
     emb_dist_1 = float(np.linalg.norm(embs[1] - embs[0]))
     emb_dist_2 = float(np.linalg.norm(embs[2] - embs[1]))
     
+    # Compute data extent for adaptive label placement
+    all_x = list(proj[:, 0]) + [proj_baseline[0], proj_perturbed_weak[0], proj_perturbed_strong[0]]
+    all_y = list(proj[:, 1]) + [proj_baseline[1], proj_perturbed_weak[1], proj_perturbed_strong[1]]
+    x_range = max(all_x) - min(all_x)
+    y_range = max(all_y) - min(all_y)
+    # Use proportional offsets based on data extent
+    ox = x_range * 0.06   # horizontal offset unit
+    oy = y_range * 0.06   # vertical offset unit
+    
     # --- 1. Linear Probe Decision Boundary Line ---
-    # Hyperplane orthogonal to steering vector separating Romance space from Crime space
     probe_midpoint = (proj_baseline + proj_perturbed_strong) / 2.0
     vec_direction = proj_perturbed_strong - proj_baseline
     perp_direction = np.array([-vec_direction[1], vec_direction[0]])
@@ -1040,73 +1058,70 @@ def run_perturbation_study(
         label="Linear Probe Boundary"
     )
     
-    # Probe Boundary Label placed cleanly off the top end of the line
+    # Probe boundary label — pinned to bottom-left corner of the axes
     ax.text(
-        probe_line_p2[0] + 0.3, probe_line_p2[1] + 0.2,
+        0.01, 0.01,
         "Linear Probe Boundary:\n$P(\\mathrm{Romance})$ vs $P(\\mathrm{Crime})$",
-        fontsize=9.0,
+        fontsize=8.0,
         fontweight="bold",
         fontstyle="italic",
         color="#2C3E50",
         ha="left",
         va="bottom",
-        bbox=dict(boxstyle="round,pad=0.35", facecolor="#F2F4F4", edgecolor="#7F8C8D", alpha=0.95, lw=1.1),
+        transform=ax.transAxes,
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="#F2F4F4", edgecolor="#7F8C8D", alpha=0.90, lw=1.1),
         zorder=9
     )
 
     # --- 2. Sequential Connected Trajectory Arrows (A -> B -> C) ---
-    # Vector 1: Baseline -> Weak (+Action Context)
     ax.annotate(
         '', 
         xy=(proj_perturbed_weak[0], proj_perturbed_weak[1]), 
         xytext=(proj_baseline[0], proj_baseline[1]),
-        arrowprops=dict(
-            arrowstyle="-|>", 
-            color="#D35400", 
-            lw=3.0, 
-            mutation_scale=18
-        ),
+        arrowprops=dict(arrowstyle="-|>", color="#D35400", lw=3.0, mutation_scale=18),
         zorder=6
     )
     
-    # Vector 2: Weak -> Strong (+Crime/Mystery Shift)
     ax.annotate(
         '', 
         xy=(proj_perturbed_strong[0], proj_perturbed_strong[1]), 
         xytext=(proj_perturbed_weak[0], proj_perturbed_weak[1]),
-        arrowprops=dict(
-            arrowstyle="-|>", 
-            color="#7D3C98", 
-            lw=3.5, 
-            linestyle="--",
-            mutation_scale=22
-        ),
+        arrowprops=dict(arrowstyle="-|>", color="#7D3C98", lw=3.5, linestyle="--", mutation_scale=22),
         zorder=6
     )
 
-    # Vector Delta Callout Badges (positioned cleanly without overlap)
+    # Vector delta callout badges — placed at midpoints with adaptive offsets
     mid1 = (proj_baseline + proj_perturbed_weak) / 2.0
+    # Place action badge perpendicular to the arrow (below-right if arrow goes up-left, etc.)
+    arrow1_dir = proj_perturbed_weak - proj_baseline
+    perp1 = np.array([arrow1_dir[1], -arrow1_dir[0]])
+    perp1 = perp1 / (np.linalg.norm(perp1) + 1e-8)
+    badge1_pos = mid1 + perp1 * oy * 2.5
     ax.text(
-        mid1[0] + 0.8, mid1[1] + 0.5,
+        badge1_pos[0], badge1_pos[1],
         f"+Action Context\n($\\Delta z_1 = {emb_dist_1:.2f}$)",
-        fontsize=9.0,
+        fontsize=8.5,
         fontweight="bold",
         color="#BA4A00",
-        ha="left",
-        va="bottom",
+        ha="center",
+        va="center",
         bbox=dict(boxstyle="round,pad=0.35", facecolor="#FBEEE6", edgecolor="#E67E22", alpha=0.95, lw=1.2),
         zorder=8
     )
 
     mid2 = (proj_perturbed_weak + proj_perturbed_strong) / 2.0
+    arrow2_dir = proj_perturbed_strong - proj_perturbed_weak
+    perp2 = np.array([-arrow2_dir[1], arrow2_dir[0]])
+    perp2 = perp2 / (np.linalg.norm(perp2) + 1e-8)
+    badge2_pos = mid2 + perp2 * oy * 2.5
     ax.text(
-        mid2[0] - 0.8, mid2[1] + 0.5,
+        badge2_pos[0], badge2_pos[1],
         f"+Crime/Mystery Shift\n($\\Delta z_2 = {emb_dist_2:.2f}$)",
-        fontsize=9.0,
+        fontsize=8.5,
         fontweight="bold",
         color="#6C3483",
-        ha="right",
-        va="bottom",
+        ha="center",
+        va="center",
         bbox=dict(boxstyle="round,pad=0.35", facecolor="#F5EEF8", edgecolor="#8E44AD", alpha=0.95, lw=1.2),
         zorder=8
     )
@@ -1116,33 +1131,36 @@ def run_perturbation_study(
     ax.scatter([proj_perturbed_weak[0]], [proj_perturbed_weak[1]], color='#E67E22', marker='*', s=400, edgecolor='black', linewidth=1.8, zorder=7)
     ax.scatter([proj_perturbed_strong[0]], [proj_perturbed_strong[1]], color='#8E44AD', marker='*', s=380, edgecolor='black', linewidth=1.8, zorder=7)
 
-    # Clean, non-overlapping node labels
-    ax.text(
-        proj_baseline[0] + 0.6, proj_baseline[1] + 0.8, 
-        "Baseline Profile\n(Rom-Coms & Love)", 
-        fontsize=9.5, fontweight='bold', color='#B7950B', ha='left', va='bottom', 
-        bbox=dict(boxstyle="round,pad=0.35", facecolor="#FEF9E7", edgecolor="#F1C40F", alpha=0.95, lw=1.2), zorder=8
-    )
-    ax.text(
-        proj_perturbed_weak[0] + 0.6, proj_perturbed_weak[1] - 0.6, 
-        "Perturbed (Weak)\n(+Action Scenes)", 
-        fontsize=9.5, fontweight='bold', color='#BA4A00', ha='left', va='top', 
-        bbox=dict(boxstyle="round,pad=0.35", facecolor="#FBEEE6", edgecolor="#E67E22", alpha=0.95, lw=1.2), zorder=8
-    )
-    ax.text(
-        proj_perturbed_strong[0] - 0.6, proj_perturbed_strong[1] - 0.6, 
-        "Perturbed (Strong)\n(Crime & Mystery Thrillers)", 
-        fontsize=9.5, fontweight='bold', color='#6C3483', ha='right', va='top', 
-        bbox=dict(boxstyle="round,pad=0.35", facecolor="#F5EEF8", edgecolor="#8E44AD", alpha=0.95, lw=1.2), zorder=8
-    )
+    # Node labels — use connectionstyle annotations with arrows to keep labels clear of data
+    node_labels = [
+        (proj_baseline, "Baseline Profile\n(Rom-Coms & Love)", '#B7950B', '#FEF9E7', '#F1C40F',
+         (3*ox, -3*oy)),
+        (proj_perturbed_weak, "Perturbed (Weak)\n(+Action Scenes)", '#BA4A00', '#FBEEE6', '#E67E22',
+         (3*ox, 2*oy)),
+        (proj_perturbed_strong, "Perturbed (Strong)\n(Crime & Mystery Thrillers)", '#6C3483', '#F5EEF8', '#8E44AD',
+         (-3*ox, 2*oy)),
+    ]
+    
+    for pos, label, txtcolor, facecolor, edgecolor, (dx, dy) in node_labels:
+        ax.annotate(
+            label,
+            xy=(pos[0], pos[1]),
+            xytext=(pos[0] + dx, pos[1] + dy),
+            fontsize=9.0,
+            fontweight='bold',
+            color=txtcolor,
+            ha='center',
+            va='center',
+            bbox=dict(boxstyle="round,pad=0.35", facecolor=facecolor, edgecolor=edgecolor, alpha=0.95, lw=1.2),
+            arrowprops=dict(arrowstyle="-", color=edgecolor, lw=1.0, alpha=0.6),
+            zorder=8
+        )
 
-    # Calculate generous axis limits to prevent any label clipping
-    all_x = list(proj[:, 0]) + [proj_baseline[0], proj_perturbed_weak[0], proj_perturbed_strong[0]]
-    all_y = list(proj[:, 1]) + [proj_baseline[1], proj_perturbed_weak[1], proj_perturbed_strong[1]]
+    # Generous axis limits
     x_min, x_max = min(all_x), max(all_x)
     y_min, y_max = min(all_y), max(all_y)
-    x_pad = (x_max - x_min) * 0.12
-    y_pad = (y_max - y_min) * 0.15
+    x_pad = x_range * 0.18
+    y_pad = y_range * 0.18
     ax.set_xlim(x_min - x_pad, x_max + x_pad)
     ax.set_ylim(y_min - y_pad, y_max + y_pad)
 
@@ -1152,6 +1170,7 @@ def run_perturbation_study(
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"[Interpretability] Saved profile perturbation study plot to {out_path}")
+
 
 
 def visualize_user_profiles(
@@ -1179,14 +1198,17 @@ def visualize_user_profiles(
     force full recomputation.
     """
     os.makedirs(CACHE_DIR, exist_ok=True)
-    cache_key = _make_cache_key(model_path, len(profiles), theme_method, n_clusters)
+    data_key = _make_data_cache_key(model_path, len(profiles), n_clusters)
+    theme_key = _make_theme_cache_key(data_key, theme_method)
+    print(f"[Cache] data_key={data_key} (model={model_path}, n={len(profiles)}, k={n_clusters})")
+    print(f"[Cache] theme_key={theme_key} (theme_method={theme_method})")
     
-    emb_cache   = os.path.join(CACHE_DIR, f"{cache_key}_embs.npy")
-    color_cache = os.path.join(CACHE_DIR, f"{cache_key}_colors.npy")
-    proj_cache  = os.path.join(CACHE_DIR, f"{cache_key}_proj.npy")
-    label_cache = os.path.join(CACHE_DIR, f"{cache_key}_labels.npy")
-    theme_cache = os.path.join(CACHE_DIR, f"{cache_key}_themes.json")
-    reducer_cache = os.path.join(CACHE_DIR, f"{cache_key}_reducer.pkl")
+    emb_cache     = os.path.join(CACHE_DIR, f"{data_key}_embs.npy")
+    color_cache   = os.path.join(CACHE_DIR, f"{data_key}_colors.npy")
+    proj_cache    = os.path.join(CACHE_DIR, f"{data_key}_proj.npy")
+    label_cache   = os.path.join(CACHE_DIR, f"{data_key}_labels.npy")
+    reducer_cache = os.path.join(CACHE_DIR, f"{data_key}_reducer.pkl")
+    theme_cache   = os.path.join(CACHE_DIR, f"{theme_key}_themes.json")
     
     # --- 1. Embeddings ---
     if use_cache and os.path.exists(emb_cache):
