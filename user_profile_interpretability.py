@@ -522,7 +522,7 @@ def plot_umap(
                         alpha=0.95,
                         lw=1.3
                     ),
-                    fontsize=8.5,
+                    fontsize=11.5,
                     fontweight="bold",
                     color="#2C3E50",
                     ha="center",
@@ -540,7 +540,7 @@ def plot_umap(
             edgecolors='none'
         )
         
-    ax.set_title("Semantic Mapping of User Profile Embeddings", fontsize=14, pad=20, fontweight="bold")
+    ax.set_title("Semantic Mapping of User Profile Embeddings", fontsize=18, pad=22, fontweight="bold")
     
     plt.tight_layout()
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
@@ -868,6 +868,8 @@ def compute_global_attribution(
 
 def plot_global_attribution(word_avg_attrs: dict, word_categories: dict, out_path: str = "img/global_profile_attribution.png"):
     """Plots the top 20 user profile words by global average gradient attribution, colored by category."""
+    import matplotlib.patches as mpatches
+
     if not word_avg_attrs:
         print("Warning: No word attributions computed. Skipping global plot.")
         return
@@ -879,20 +881,25 @@ def plot_global_attribution(word_avg_attrs: dict, word_categories: dict, out_pat
     avg_attrs = [w[1] for w in top_20]
     categories = [word_categories[w[0]] for w in top_20]
     
-    # Premium colors: Blue for User Profile, Green for Item Title, Purple for Template
+    # Consistent color palette matching token-level saliency plot
     colors_map = {
-        "User Profile": "#3498DB",
-        "Item Title": "#2ECC71",
-        "Template": "#9B59B6"
+        "User Profile": "#4A90E2",
+        "Item Title": "#E25A5A",
+        "Template": "#A0A0A0"
     }
     bar_colors = [colors_map.get(cat, "#7F8C8D") for cat in categories]
     
-    fig, ax = plt.subplots(figsize=(11, 8.5))
+    # Twin figure size (11.5 x 8.5 in) standardized for side-by-side LaTeX minipage alignment
+    fig, ax = plt.subplots(figsize=(11.5, 8.5))
     
-    bars = ax.barh(np.arange(len(words)), avg_attrs, color=bar_colors, edgecolor='none', height=0.7)
+    bars = ax.barh(np.arange(len(words)), avg_attrs, color=bar_colors, edgecolor='none', height=0.72)
     ax.set_yticks(np.arange(len(words)))
-    ax.set_yticklabels(words, fontsize=11, fontweight="semibold")
+    ax.set_yticklabels(words, fontsize=14, fontweight="bold")
+    ax.tick_params(axis='x', labelsize=12.5)
     ax.invert_yaxis()  # Put highest average attribution at the top
+    
+    # Reserve right-side whitespace so legend and numbers fit cleanly
+    ax.set_xlim(0, max(avg_attrs) * 1.35)
     
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -901,8 +908,18 @@ def plot_global_attribution(word_avg_attrs: dict, word_categories: dict, out_pat
     ax.xaxis.grid(True, linestyle='--', alpha=0.5)
     ax.set_axisbelow(True)
     
-    ax.set_xlabel("Average Gradient Attribution per Occurrence", fontsize=11, fontweight="semibold", labelpad=12)
-    ax.set_title("Global Token Attribution (Average Saliency per Occurrence)", fontsize=13, pad=20, fontweight='bold')
+    for bar in bars:
+        width = bar.get_width()
+        ax.text(width + 0.01 * max(avg_attrs), bar.get_y() + bar.get_height()/2, f"{width:.3f}", 
+                va='center', ha='left', fontsize=12.5, fontweight='bold', color='#222222')
+    
+    ax.set_xlabel("Average Gradient Attribution per Occurrence", fontsize=15, fontweight="bold", labelpad=12)
+    ax.set_title("Global Token Attribution", fontsize=18, pad=18, fontweight='bold')
+    
+    present_cats = [cat for cat in colors_map.keys() if cat in categories]
+    patches = [mpatches.Patch(color=colors_map[k], label=k) for k in present_cats]
+    if patches:
+        ax.legend(handles=patches, loc='lower right', frameon=True, facecolor='white', edgecolor='none', fontsize=12.5)
     
     plt.tight_layout()
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
@@ -969,7 +986,7 @@ def run_perturbation_study(
     proj_perturbed_weak = centroids[action_idx] if action_idx in centroids else proj_both[1]
     proj_perturbed_strong = centroids[crime_idx] if crime_idx in centroids else proj_both[2]
 
-    fig, ax = plt.subplots(figsize=(12.5, 6.2))
+    fig, ax = plt.subplots(figsize=(14, 7.2))
     
     # Hide all axis borders and labels
     ax.spines['top'].set_visible(False)
@@ -1004,15 +1021,15 @@ def run_perturbation_study(
                 theme_label = cluster_themes[i].split("\n")[-1]
                 color = cluster_colors[i % len(cluster_colors)]
                 legend_elements.append(
-                    Line2D([0], [0], marker='o', color='w', label=theme_label, markerfacecolor=color, markersize=7)
+                    Line2D([0], [0], marker='o', color='w', label=theme_label, markerfacecolor=color, markersize=8)
                 )
             ax.legend(
                 handles=legend_elements, 
                 title="Representation Taste Clusters", 
-                title_fontsize=8.5,
+                title_fontsize=11.5,
                 ncols=2,
                 loc="upper right", 
-                fontsize=7.5, 
+                fontsize=10.5, 
                 framealpha=0.95, 
                 facecolor="white",
                 edgecolor="#BDC3C7",
@@ -1051,7 +1068,7 @@ def run_perturbation_study(
         [probe_line_p1[1], probe_line_p2[1]], 
         color="#34495E", 
         linestyle="--", 
-        linewidth=2.0, 
+        linewidth=2.2, 
         alpha=0.75,
         zorder=5,
         label="Linear Probe Boundary"
@@ -1064,7 +1081,7 @@ def run_perturbation_study(
     ax.text(
         p_bottom[0] + 0.15, p_bottom[1] + 0.1,
         "Linear Probe Boundary:\n$P(\\mathrm{Crime})$ vs $P(\\mathrm{Romance})$",
-        fontsize=8.0,
+        fontsize=11.5,
         fontweight="bold",
         fontstyle="italic",
         color="#2C3E50",
@@ -1079,7 +1096,7 @@ def run_perturbation_study(
         '', 
         xy=(proj_perturbed_weak[0], proj_perturbed_weak[1]), 
         xytext=(proj_baseline[0], proj_baseline[1]),
-        arrowprops=dict(arrowstyle="-|>", color="#D35400", lw=2.8, mutation_scale=16),
+        arrowprops=dict(arrowstyle="-|>", color="#D35400", lw=3.2, mutation_scale=18),
         zorder=6
     )
     
@@ -1087,7 +1104,7 @@ def run_perturbation_study(
         '', 
         xy=(proj_perturbed_strong[0], proj_perturbed_strong[1]), 
         xytext=(proj_perturbed_weak[0], proj_perturbed_weak[1]),
-        arrowprops=dict(arrowstyle="-|>", color="#7D3C98", lw=3.0, linestyle="--", mutation_scale=18),
+        arrowprops=dict(arrowstyle="-|>", color="#7D3C98", lw=3.5, linestyle="--", mutation_scale=20),
         zorder=6
     )
 
@@ -1100,12 +1117,12 @@ def run_perturbation_study(
     ax.text(
         badge1_pos[0], badge1_pos[1],
         f"+Action Context\n($\\Delta z_1 = {emb_dist_1:.2f}$)",
-        fontsize=8.0,
+        fontsize=11.0,
         fontweight="bold",
         color="#BA4A00",
         ha="center",
         va="center",
-        bbox=dict(boxstyle="round,pad=0.3", facecolor="#FBEEE6", edgecolor="#E67E22", alpha=0.95, lw=1.1),
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="#FBEEE6", edgecolor="#E67E22", alpha=0.95, lw=1.2),
         zorder=8
     )
 
@@ -1117,19 +1134,19 @@ def run_perturbation_study(
     ax.text(
         badge2_pos[0], badge2_pos[1],
         f"+Crime/Mystery Shift\n($\\Delta z_2 = {emb_dist_2:.2f}$)",
-        fontsize=8.0,
+        fontsize=11.0,
         fontweight="bold",
         color="#6C3483",
         ha="center",
         va="center",
-        bbox=dict(boxstyle="round,pad=0.3", facecolor="#F5EEF8", edgecolor="#8E44AD", alpha=0.95, lw=1.1),
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="#F5EEF8", edgecolor="#8E44AD", alpha=0.95, lw=1.2),
         zorder=8
     )
 
     # --- 3. Plot Nodes (Baseline, Weak, Strong) ---
-    ax.scatter([proj_baseline[0]], [proj_baseline[1]], color='#F1C40F', marker='*', s=350, edgecolor='black', linewidth=1.6, zorder=7)
-    ax.scatter([proj_perturbed_weak[0]], [proj_perturbed_weak[1]], color='#E67E22', marker='*', s=350, edgecolor='black', linewidth=1.6, zorder=7)
-    ax.scatter([proj_perturbed_strong[0]], [proj_perturbed_strong[1]], color='#8E44AD', marker='*', s=330, edgecolor='black', linewidth=1.6, zorder=7)
+    ax.scatter([proj_baseline[0]], [proj_baseline[1]], color='#F1C40F', marker='*', s=400, edgecolor='black', linewidth=1.8, zorder=7)
+    ax.scatter([proj_perturbed_weak[0]], [proj_perturbed_weak[1]], color='#E67E22', marker='*', s=400, edgecolor='black', linewidth=1.8, zorder=7)
+    ax.scatter([proj_perturbed_strong[0]], [proj_perturbed_strong[1]], color='#8E44AD', marker='*', s=380, edgecolor='black', linewidth=1.8, zorder=7)
 
     # Node labels — connectionstyle annotations with tight offsets
     node_labels = [
@@ -1146,13 +1163,13 @@ def run_perturbation_study(
             label,
             xy=(pos[0], pos[1]),
             xytext=(pos[0] + dx, pos[1] + dy),
-            fontsize=8.5,
+            fontsize=11.5,
             fontweight='bold',
             color=txtcolor,
             ha='center',
             va='center',
-            bbox=dict(boxstyle="round,pad=0.3", facecolor=facecolor, edgecolor=edgecolor, alpha=0.95, lw=1.1),
-            arrowprops=dict(arrowstyle="-", color=edgecolor, lw=1.0, alpha=0.6),
+            bbox=dict(boxstyle="round,pad=0.35", facecolor=facecolor, edgecolor=edgecolor, alpha=0.95, lw=1.2),
+            arrowprops=dict(arrowstyle="-", color=edgecolor, lw=1.2, alpha=0.6),
             zorder=8
         )
 
@@ -1164,7 +1181,7 @@ def run_perturbation_study(
     ax.set_xlim(x_min - x_pad, x_max + x_pad)
     ax.set_ylim(y_min - y_pad, y_max + y_pad)
 
-    ax.set_title("Activation Steering & Concept Boundary Trajectory in Profile Representation Space", fontsize=13, pad=15, fontweight="bold")
+    ax.set_title("Activation Steering & Concept Boundary Trajectory in Profile Representation Space", fontsize=18, pad=22, fontweight="bold")
     
     plt.tight_layout()
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
@@ -1383,10 +1400,11 @@ def interpret_user_profile_contribution(
     for k, v in percentages.items():
         print(f"  - {k}: {v:.1f}%")
         
-    # Plot top 20 tokens by attribution
-    fig, ax = plt.subplots(figsize=(10, 8))
-    sorted_indices = np.argsort(attr)
-    top_indices = sorted_indices[-20:]
+    # Twin figure size (11.5 x 8.5 in) standardized for side-by-side LaTeX minipage alignment
+    fig, ax = plt.subplots(figsize=(11.5, 8.5))
+    
+    sorted_indices = np.argsort(attr)[::-1]
+    top_indices = sorted_indices[:20]
     
     top_tokens = [tokens[idx] for idx in top_indices]
     top_attr = [attr[idx] for idx in top_indices]
@@ -1399,11 +1417,15 @@ def interpret_user_profile_contribution(
     }
     bar_colors = [colors_map[c] for c in top_cats]
     
-    bars = ax.barh(np.arange(len(top_tokens)), top_attr, color=bar_colors, edgecolor='none', height=0.75)
+    bars = ax.barh(np.arange(len(top_tokens)), top_attr, color=bar_colors, edgecolor='none', height=0.72)
     ax.set_yticks(np.arange(len(top_tokens)))
-    ax.set_yticklabels([repr(t) for t in top_tokens], fontsize=10, family='monospace')
+    ax.set_yticklabels([repr(t) for t in top_tokens], fontsize=14, fontweight="bold", family='monospace')
+    ax.tick_params(axis='x', labelsize=12.5)
+    ax.invert_yaxis()  # Highest attribution at top
     
-    # Clean up spines and style
+    # Reserve right 42% of X-axis whitespace so wide Case Study Card & Legend fit comfortably
+    ax.set_xlim(0, max(top_attr) * 1.72)
+    
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.spines['bottom'].set_visible(False)
@@ -1414,23 +1436,28 @@ def interpret_user_profile_contribution(
     for bar in bars:
         width = bar.get_width()
         ax.text(width + 0.01 * max(top_attr), bar.get_y() + bar.get_height()/2, f"{width:.3f}", 
-                va='center', ha='left', fontsize=9, color='#333333')
+                va='center', ha='left', fontsize=12.5, fontweight="bold", color='#222222')
                 
-    ax.set_title("Token-level Saliency (Gradient Attribution) for Rating Prediction", fontsize=13, pad=20, fontweight='bold')
-    ax.set_xlabel("Attribution Score (L2 Norm of Gradient)", fontsize=11, labelpad=10)
+    ax.set_title("Token-level Gradient Saliency", fontsize=18, pad=18, fontweight='bold')
+    ax.set_xlabel("Attribution Score ($L_2$ Norm of Gradient)", fontsize=15, fontweight="bold", labelpad=12)
     
+    # 1. Legend at lower-right
     patches = [mpatches.Patch(color=v, label=f"{k} ({percentages[k]:.1f}%)") for k, v in colors_map.items()]
-    ax.legend(handles=patches, loc='lower right', frameon=True, facecolor='white', edgecolor='none')
+    ax.legend(handles=patches, loc='lower right', frameon=True, facecolor='white', edgecolor='none', fontsize=12.5)
     
-    wrapped_profile = textwrap.fill(profile, width=60)
-    wrapped_item = textwrap.fill(item_title, width=60)
+    # 2. Wide, high-legibility Case Study Card in upper-right reserved whitespace
+    wrapped_profile = textwrap.fill(profile, width=42)
+    wrapped_item = textwrap.fill(item_title, width=42)
     text_block = (
-        f"Case Study details:\n"
-        f"Profile: '{wrapped_profile}'\n"
-        f"Item: '{wrapped_item}'"
+        "CASE STUDY DETAILS\n"
+        "───────────────────────────────────────────\n"
+        "▶ USER PROFILE:\n"
+        f"\"{wrapped_profile}\"\n\n"
+        "▶ TARGET ITEM TITLE:\n"
+        f"\"{wrapped_item}\""
     )
-    ax.text(0.02, 0.95, text_block, transform=ax.transAxes, fontsize=9, va='top', ha='left',
-            bbox=dict(boxstyle='round,pad=0.5', facecolor='#F8F9FA', edgecolor='#E0E0E0', alpha=0.9))
+    ax.text(0.98, 0.38, text_block, transform=ax.transAxes, fontsize=12.5, fontweight='normal', va='bottom', ha='right',
+            bbox=dict(boxstyle='round,pad=0.55', facecolor='#FFFFFF', edgecolor='#B0B0B0', alpha=0.98, lw=1.2), zorder=10)
             
     plt.tight_layout()
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
