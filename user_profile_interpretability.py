@@ -969,7 +969,7 @@ def run_perturbation_study(
     proj_perturbed_weak = centroids[action_idx] if action_idx in centroids else proj_both[1]
     proj_perturbed_strong = centroids[crime_idx] if crime_idx in centroids else proj_both[2]
 
-    fig, ax = plt.subplots(figsize=(15, 6.5))
+    fig, ax = plt.subplots(figsize=(12.5, 6.2))
     
     # Hide all axis borders and labels
     ax.spines['top'].set_visible(False)
@@ -993,7 +993,7 @@ def run_perturbation_study(
                 edgecolors='none'
             )
             
-        # Wide-angle 2-column legend OUTSIDE the plot area to avoid obscuring data
+        # Wide-angle 2-column legend at top-right
         if cluster_themes is not None:
             from matplotlib.lines import Line2D
             legend_elements = []
@@ -1011,15 +1011,14 @@ def run_perturbation_study(
                 title="Representation Taste Clusters", 
                 title_fontsize=8.5,
                 ncols=2,
-                loc="upper center", 
-                bbox_to_anchor=(0.5, 1.02),
+                loc="upper right", 
                 fontsize=7.5, 
                 framealpha=0.95, 
                 facecolor="white",
                 edgecolor="#BDC3C7",
                 borderpad=0.4,
-                columnspacing=1.0,
-                handletextpad=0.4
+                columnspacing=0.8,
+                handletextpad=0.3
             )
     else:
         ax.scatter(proj[:, 0], proj[:, 1], color='#34495E', s=40, alpha=0.25, edgecolors='none')
@@ -1033,9 +1032,9 @@ def run_perturbation_study(
     all_y = list(proj[:, 1]) + [proj_baseline[1], proj_perturbed_weak[1], proj_perturbed_strong[1]]
     x_range = max(all_x) - min(all_x)
     y_range = max(all_y) - min(all_y)
-    # Use proportional offsets based on data extent
-    ox = x_range * 0.06   # horizontal offset unit
-    oy = y_range * 0.06   # vertical offset unit
+    # Use compact proportional offsets
+    ox = x_range * 0.04
+    oy = y_range * 0.04
     
     # --- 1. Linear Probe Decision Boundary Line ---
     probe_midpoint = (proj_baseline + proj_perturbed_strong) / 2.0
@@ -1043,7 +1042,7 @@ def run_perturbation_study(
     perp_direction = np.array([-vec_direction[1], vec_direction[0]])
     perp_norm = perp_direction / (np.linalg.norm(perp_direction) + 1e-8)
     
-    line_len = 5.0
+    line_len = 4.5
     probe_line_p1 = probe_midpoint - line_len * perp_norm
     probe_line_p2 = probe_midpoint + line_len * perp_norm
     
@@ -1052,24 +1051,26 @@ def run_perturbation_study(
         [probe_line_p1[1], probe_line_p2[1]], 
         color="#34495E", 
         linestyle="--", 
-        linewidth=2.2, 
+        linewidth=2.0, 
         alpha=0.75,
         zorder=5,
         label="Linear Probe Boundary"
     )
     
-    # Probe boundary label — pinned to bottom-left corner of the axes
+    # Select the endpoint that lies toward the bottom of the plot (lowest y)
+    p_bottom = probe_line_p1 if probe_line_p1[1] <= probe_line_p2[1] else probe_line_p2
+    
+    # Probe boundary label — placed at the bottom endpoint right next to the boundary line
     ax.text(
-        0.01, 0.01,
-        "Linear Probe Boundary:\n$P(\\mathrm{Romance})$ vs $P(\\mathrm{Crime})$",
+        p_bottom[0] + 0.15, p_bottom[1] + 0.1,
+        "Linear Probe Boundary:\n$P(\\mathrm{Crime})$ vs $P(\\mathrm{Romance})$",
         fontsize=8.0,
         fontweight="bold",
         fontstyle="italic",
         color="#2C3E50",
         ha="left",
         va="bottom",
-        transform=ax.transAxes,
-        bbox=dict(boxstyle="round,pad=0.35", facecolor="#F2F4F4", edgecolor="#7F8C8D", alpha=0.90, lw=1.1),
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="#F2F4F4", edgecolor="#7F8C8D", alpha=0.92, lw=1.0),
         zorder=9
     )
 
@@ -1078,7 +1079,7 @@ def run_perturbation_study(
         '', 
         xy=(proj_perturbed_weak[0], proj_perturbed_weak[1]), 
         xytext=(proj_baseline[0], proj_baseline[1]),
-        arrowprops=dict(arrowstyle="-|>", color="#D35400", lw=3.0, mutation_scale=18),
+        arrowprops=dict(arrowstyle="-|>", color="#D35400", lw=2.8, mutation_scale=16),
         zorder=6
     )
     
@@ -1086,26 +1087,25 @@ def run_perturbation_study(
         '', 
         xy=(proj_perturbed_strong[0], proj_perturbed_strong[1]), 
         xytext=(proj_perturbed_weak[0], proj_perturbed_weak[1]),
-        arrowprops=dict(arrowstyle="-|>", color="#7D3C98", lw=3.5, linestyle="--", mutation_scale=22),
+        arrowprops=dict(arrowstyle="-|>", color="#7D3C98", lw=3.0, linestyle="--", mutation_scale=18),
         zorder=6
     )
 
     # Vector delta callout badges — placed at midpoints with adaptive offsets
     mid1 = (proj_baseline + proj_perturbed_weak) / 2.0
-    # Place action badge perpendicular to the arrow (below-right if arrow goes up-left, etc.)
     arrow1_dir = proj_perturbed_weak - proj_baseline
     perp1 = np.array([arrow1_dir[1], -arrow1_dir[0]])
     perp1 = perp1 / (np.linalg.norm(perp1) + 1e-8)
-    badge1_pos = mid1 + perp1 * oy * 2.5
+    badge1_pos = mid1 + perp1 * oy * 2.0
     ax.text(
         badge1_pos[0], badge1_pos[1],
         f"+Action Context\n($\\Delta z_1 = {emb_dist_1:.2f}$)",
-        fontsize=8.5,
+        fontsize=8.0,
         fontweight="bold",
         color="#BA4A00",
         ha="center",
         va="center",
-        bbox=dict(boxstyle="round,pad=0.35", facecolor="#FBEEE6", edgecolor="#E67E22", alpha=0.95, lw=1.2),
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="#FBEEE6", edgecolor="#E67E22", alpha=0.95, lw=1.1),
         zorder=8
     )
 
@@ -1113,32 +1113,32 @@ def run_perturbation_study(
     arrow2_dir = proj_perturbed_strong - proj_perturbed_weak
     perp2 = np.array([-arrow2_dir[1], arrow2_dir[0]])
     perp2 = perp2 / (np.linalg.norm(perp2) + 1e-8)
-    badge2_pos = mid2 + perp2 * oy * 2.5
+    badge2_pos = mid2 + perp2 * oy * 2.0
     ax.text(
         badge2_pos[0], badge2_pos[1],
         f"+Crime/Mystery Shift\n($\\Delta z_2 = {emb_dist_2:.2f}$)",
-        fontsize=8.5,
+        fontsize=8.0,
         fontweight="bold",
         color="#6C3483",
         ha="center",
         va="center",
-        bbox=dict(boxstyle="round,pad=0.35", facecolor="#F5EEF8", edgecolor="#8E44AD", alpha=0.95, lw=1.2),
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="#F5EEF8", edgecolor="#8E44AD", alpha=0.95, lw=1.1),
         zorder=8
     )
 
     # --- 3. Plot Nodes (Baseline, Weak, Strong) ---
-    ax.scatter([proj_baseline[0]], [proj_baseline[1]], color='#F1C40F', marker='*', s=400, edgecolor='black', linewidth=1.8, zorder=7)
-    ax.scatter([proj_perturbed_weak[0]], [proj_perturbed_weak[1]], color='#E67E22', marker='*', s=400, edgecolor='black', linewidth=1.8, zorder=7)
-    ax.scatter([proj_perturbed_strong[0]], [proj_perturbed_strong[1]], color='#8E44AD', marker='*', s=380, edgecolor='black', linewidth=1.8, zorder=7)
+    ax.scatter([proj_baseline[0]], [proj_baseline[1]], color='#F1C40F', marker='*', s=350, edgecolor='black', linewidth=1.6, zorder=7)
+    ax.scatter([proj_perturbed_weak[0]], [proj_perturbed_weak[1]], color='#E67E22', marker='*', s=350, edgecolor='black', linewidth=1.6, zorder=7)
+    ax.scatter([proj_perturbed_strong[0]], [proj_perturbed_strong[1]], color='#8E44AD', marker='*', s=330, edgecolor='black', linewidth=1.6, zorder=7)
 
-    # Node labels — use connectionstyle annotations with arrows to keep labels clear of data
+    # Node labels — connectionstyle annotations with tight offsets
     node_labels = [
         (proj_baseline, "Baseline Profile\n(Rom-Coms & Love)", '#B7950B', '#FEF9E7', '#F1C40F',
-         (3*ox, -3*oy)),
+         (2.5*ox, -2.0*oy)),
         (proj_perturbed_weak, "Perturbed (Weak)\n(+Action Scenes)", '#BA4A00', '#FBEEE6', '#E67E22',
-         (3*ox, 2*oy)),
+         (2.5*ox, 1.8*oy)),
         (proj_perturbed_strong, "Perturbed (Strong)\n(Crime & Mystery Thrillers)", '#6C3483', '#F5EEF8', '#8E44AD',
-         (-3*ox, 2*oy)),
+         (-2.5*ox, 1.8*oy)),
     ]
     
     for pos, label, txtcolor, facecolor, edgecolor, (dx, dy) in node_labels:
@@ -1146,25 +1146,25 @@ def run_perturbation_study(
             label,
             xy=(pos[0], pos[1]),
             xytext=(pos[0] + dx, pos[1] + dy),
-            fontsize=9.0,
+            fontsize=8.5,
             fontweight='bold',
             color=txtcolor,
             ha='center',
             va='center',
-            bbox=dict(boxstyle="round,pad=0.35", facecolor=facecolor, edgecolor=edgecolor, alpha=0.95, lw=1.2),
+            bbox=dict(boxstyle="round,pad=0.3", facecolor=facecolor, edgecolor=edgecolor, alpha=0.95, lw=1.1),
             arrowprops=dict(arrowstyle="-", color=edgecolor, lw=1.0, alpha=0.6),
             zorder=8
         )
 
-    # Generous axis limits
+    # Tight axis limits to eliminate excessive whitespace
     x_min, x_max = min(all_x), max(all_x)
     y_min, y_max = min(all_y), max(all_y)
-    x_pad = x_range * 0.18
-    y_pad = y_range * 0.18
+    x_pad = x_range * 0.08
+    y_pad = y_range * 0.08
     ax.set_xlim(x_min - x_pad, x_max + x_pad)
     ax.set_ylim(y_min - y_pad, y_max + y_pad)
 
-    ax.set_title("Activation Steering & Concept Boundary Trajectory in Profile Representation Space", fontsize=14, pad=20, fontweight="bold")
+    ax.set_title("Activation Steering & Concept Boundary Trajectory in Profile Representation Space", fontsize=13, pad=15, fontweight="bold")
     
     plt.tight_layout()
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
