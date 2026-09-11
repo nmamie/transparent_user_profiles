@@ -75,6 +75,9 @@ def main():
                         default="out/amazon-out-reproduce-profile-title-and-description")
     parser.add_argument("--profiles", type=str, default="user_profiles/amazon_profiles.json")
     parser.add_argument("--mode", type=str, default="improved", choices=["original", "improved"])
+    parser.add_argument("--item_context", type=str, default="item title and description",
+                        choices=["item title", "item title and description"],
+                        help="must match the checkpoint's training context_out")
     parser.add_argument("--n_users", type=int, default=200)
     parser.add_argument("--n_distractors", type=int, default=99)
     parser.add_argument("--rating_threshold", type=float, default=4.0)
@@ -140,7 +143,7 @@ def main():
         cases.append({"raw_u": raw_u, "u": u, "pos": pos, "cands": [pos] + distractors})
     print(f"[Baselines] usable cases: {len(cases)}")
 
-    results = {}
+    results, diagnostics = {}, {}
 
     for model in build_models(args.mode):
         print(f"\n[Baselines] fitting {model.name} ...")
@@ -169,7 +172,8 @@ def main():
         tokenizer.padding_side = "right"
         llm = AutoModelForSequenceClassification.from_pretrained(
             args.model_path, problem_type="regression").eval().to(device)
-        title_to_desc = load_item_descriptions(data_dir)
+        title_to_desc = (load_item_descriptions(data_dir)
+                         if args.item_context == "item title and description" else None)
 
         pcts = []
         for n, case in enumerate(cases, 1):
@@ -199,9 +203,8 @@ def main():
 
         pcts = np.asarray(pcts)
         t, p = stats.ttest_1samp(pcts, 0.5)
-        results["popularity_diagnostic"] = {"spearman_rho": float(rho), "p": float(p_rho),
-                                            "positive_popularity": pos_pop,
-                                            "distractor_popularity": dis_pop}
+        diagnostics = {"spearman_rho": float(rho), "p": float(p_rho),
+                       "positive_popularity": pos_pop, "distractor_popularity": dis_pop}
         results["ProfileLLM"] = {"mean_percentile": float(pcts.mean()), "t": float(t), "p": float(p),
                                  "top1_rate": float((pcts == 1.0).mean())}
         print(f"  {'ProfileLLM':10s} percentile={pcts.mean():.4f}  t={t:.2f}  p={p:.3g}  "
@@ -214,7 +217,9 @@ def main():
 
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:
-            json.dump({"n_cases": len(cases), "mode": args.mode, "results": results}, f, indent=2)
+            json.dump({"n_cases": len(cases), "mode": args.mode,
+                       "item_context": args.item_context, "results": results,
+                       "popularity_diagnostic": diagnostics}, f, indent=2)
         print(f"\n[Baselines] saved results to {args.output}")
 
 
