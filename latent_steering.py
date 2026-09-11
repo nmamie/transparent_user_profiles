@@ -14,6 +14,8 @@ recommended. This script separates the steps:
   --run-steering   Causal test: inject the crime-minus-romance direction into the residual
                    stream at a given layer and measure (a) whether the probe readout moves as
                    intended and (b) whether predicted ratings and rankings follow.
+  --run-checks     Verifies that the interventions propagate at all: a zero vector and a
+                   constant vector must both be no-ops, a random direction must not be.
   --run-personalization
                    Does the model personalise at all? Rank each user's held-out item against
                    random catalog items.
@@ -161,6 +163,55 @@ def profile_token_span(tokenizer, prompt, profile):
 
 
 # ------------------------------------------------------------------- experiments
+def run_checks(model, tokenizer, device):
+    """Validity checks for the steering machinery, so a null result cannot be a silent no-op.
+
+    Three properties are verified:
+      1. adding a zero vector changes nothing (the hook is wired correctly);
+      2. adding a *constant* vector also changes nothing, because LayerNorm removes it -- any
+         steering direction must therefore be non-uniform across dimensions;
+      3. additive steering after `ln_f` shifts the prediction by exactly w.d, independent of the
+         item, which is why genre-selective steering has to be applied at an earlier block.
+    """
+    print("\n=== Steering validity checks ===")
+    prompt = ('Input Context: I love crime films. Based on the input context, from a scale of 1 '
+              'to 5 (1 being the lowest and 5 being the highest), I would give "Anaconda" a rating of')
+    enc = tokenizer([prompt], return_tensors="pt").to(device)
+    with torch.no_grad():
+        base = float(model(**enc).logits.item())
+
+    def logit_with(module, vec):
+        handle = module.register_forward_hook(make_steering_hook(vec))
+        try:
+            with torch.no_grad():
+                return float(model(**enc).logits.item())
+        finally:
+            handle.remove()
+
+    block = model.transformer.h[6]
+    zero = torch.zeros(model.config.n_embd, device=device)
+    const = torch.ones(model.config.n_embd, device=device) * 0.05
+    torch.manual_seed(0)
+    rand = torch.randn(model.config.n_embd, device=device)
+    rand = rand / rand.norm() * 5.0
+
+    d_zero = logit_with(block, zero) - base
+    d_const = logit_with(block, const) - base
+    d_rand = logit_with(block, rand) - base
+    print(f"  zero vector at block 6     : delta={d_zero:+.2e}  (expect 0)")
+    print(f"  constant vector at block 6 : delta={d_const:+.2e}  (expect 0; removed by LayerNorm)")
+    print(f"  random direction at block 6: delta={d_rand:+.2e}  (expect non-zero)")
+
+    w = model.score.weight.detach().squeeze(0)
+    observed = logit_with(model.transformer.ln_f, rand) - base
+    print(f"  random direction after ln_f: delta={observed:+.6f}  "
+          f"predicted w.d={float(w @ rand):+.6f}  (item-independent shift)")
+    ok = abs(d_zero) < 1e-6 and abs(d_const) < 1e-4 and abs(d_rand) > 1e-6
+    print(f"  -> interventions {'propagate correctly' if ok else 'FAILED validity check'}")
+    return {"zero": d_zero, "constant": d_const, "random": d_rand,
+            "ln_f_observed": observed, "ln_f_predicted": float(w @ rand), "passed": bool(ok)}
+
+
 def run_probe(reps, labels, seed):
     """Linear probe: is genre decodable from the profile representation?"""
     print("\n=== Probe: genre decodability from profile representation ===")
@@ -359,10 +410,14 @@ def main():
     parser.add_argument("--run-clusters", dest="run_clusters", action="store_true")
     parser.add_argument("--run-steering", dest="run_steering", action="store_true")
     parser.add_argument("--run-personalization", dest="run_personalization", action="store_true")
+    parser.add_argument("--run-checks", dest="run_checks", action="store_true",
+                        help="verify that activation interventions actually propagate")
     args = parser.parse_args()
 
-    if not (args.run_probe or args.run_clusters or args.run_steering or args.run_personalization):
+    if not (args.run_probe or args.run_clusters or args.run_steering
+            or args.run_personalization or args.run_checks):
         args.run_probe = args.run_clusters = args.run_steering = args.run_personalization = True
+        args.run_checks = True
 
     if args.output:
         d = os.path.dirname(args.output)
@@ -406,6 +461,8 @@ def main():
     print(f"[Steering] representations: {reps.shape}")
 
     results = {"model_path": args.model_path, "n_users": len(usable)}
+    if args.run_checks:
+        results["checks"] = run_checks(model, tokenizer, device)
     probe = None
     if args.run_probe:
         results["probe"], probe = run_probe(reps, labels, args.seed)

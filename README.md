@@ -233,6 +233,56 @@ python user_profile_interpretability.py \
 
 ---
 
+## 🧭 Behavioural Validation of Profile Steering
+
+The interpretability analyses above establish that profile edits move the model's *internal
+representation*. The scripts in this section test whether that movement changes the model's
+*predictions*, and provide the controls needed to interpret the result. All four write JSON to
+`results/` and run each analysis independently via flags.
+
+> **Model choice matters.** Use a checkpoint trained with `--context_out "item title and
+> description"` for any content-matching analysis. A title-only checkpoint never sees the genre
+> evidence such an effect would have to be computed from, and returns a null for that reason alone.
+
+### 1. Predicted ratings, rankings, and variance decomposition (`behavioral_validation.py`)
+```bash
+python behavioral_validation.py \
+  --model_path out/amazon-out-reproduce-profile-title-and-description \
+  --run-variance --run-steering --run-sanity --run-diagnostics
+```
+`--run-variance` splits predicted-rating variance into item, profile, and profile×item interaction
+terms; `--run-steering` scores genre-labelled item pools under each perturbation state and tests for
+a genre-selective shift in rating and in rank; `--run-sanity` checks predictive accuracy against
+ground truth; `--run-diagnostics` reports the profile length gap and description truncation rate.
+
+### 2. Latent probe, cluster validation, and activation steering (`latent_steering.py`)
+```bash
+python latent_steering.py \
+  --run-checks --run-probe --run-clusters --run-steering --run-personalization
+```
+Probes whether history-derived genre is linearly decodable from a profile representation, validates
+the UMAP taste clusters against users' actual histories (ARI/NMI), injects the crime-minus-romance
+direction into the residual stream to test for a causal effect, and checks whether the model can
+rank a held-out item above random items. Run `--run-checks` first: it verifies that interventions
+propagate, so a null cannot be a silent no-op.
+
+### 3. Baseline control for the personalisation test (`personalization_baselines.py`)
+```bash
+python personalization_baselines.py --dataset Amazon/MoviesAndTV --n_users 200
+```
+Scores identical candidate sets with cornac baselines (MostPop, MF, BPR, WMF) and with the
+fine-tuned profile model, establishing whether the ranking task is feasible on this data at all.
+
+### 4. Controls for the attribution analysis (`attribution_controls.py`)
+```bash
+python attribution_controls.py --max_examples 60
+```
+Repeats the global attribution analysis on an untrained backbone, a randomly initialised model, and
+word-shuffled profiles, and compares all of them against corpus-frequency and subword-count
+baselines, to separate effects of fine-tuning from properties of the architecture and the corpus.
+
+---
+
 ## 🧪 Scrutability & Counterfactual Test
 
 Generate counterfactual profile edits for scrutability evaluation:

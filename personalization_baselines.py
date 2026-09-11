@@ -178,8 +178,30 @@ def main():
             pcts.append(float((s[0] > s[1:]).mean()))
             if n % 50 == 0:
                 print(f"    {n}/{len(cases)} users scored")
+        # Diagnostic: MostPop scores well above chance here, so the candidate sets carry a
+        # popularity signal. Does the profile model capture any of it?
+        popularity = np.zeros(train_set.num_items)
+        for u in range(train_set.num_users):
+            for i in train_set.csr_matrix.getrow(u).indices:
+                popularity[i] += 1
+        probe_case = cases[0]
+        probe_items = rng.sample(range(train_set.num_items), 300)
+        probe_titles = [id_to_title[idx_to_raw_item[i]] for i in probe_items]
+        probe_scores = llm_scores(llm, tokenizer, profiles[probe_case["raw_u"]],
+                                  probe_titles, title_to_desc, device)
+        rho, p_rho = stats.spearmanr(probe_scores, [popularity[i] for i in probe_items])
+        pos_pop = float(np.mean([popularity[c["pos"]] for c in cases]))
+        dis_pop = float(np.mean([popularity[i] for c in cases for i in c["cands"][1:]]))
+        print(f"  diagnostic: train interactions for positives={pos_pop:.1f} "
+              f"vs distractors={dis_pop:.1f}")
+        print(f"  diagnostic: Spearman(profile-model score, item popularity) = {rho:+.3f} "
+              f"p={p_rho:.3g}")
+
         pcts = np.asarray(pcts)
         t, p = stats.ttest_1samp(pcts, 0.5)
+        results["popularity_diagnostic"] = {"spearman_rho": float(rho), "p": float(p_rho),
+                                            "positive_popularity": pos_pop,
+                                            "distractor_popularity": dis_pop}
         results["ProfileLLM"] = {"mean_percentile": float(pcts.mean()), "t": float(t), "p": float(p),
                                  "top1_rate": float((pcts == 1.0).mean())}
         print(f"  {'ProfileLLM':10s} percentile={pcts.mean():.4f}  t={t:.2f}  p={p:.3g}  "

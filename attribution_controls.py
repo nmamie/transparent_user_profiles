@@ -265,9 +265,15 @@ def main():
     top_ft = [w for w, _ in sorted(ft_attr.items(), key=lambda kv: -kv[1])[:args.top_k]]
     print(f"  top-{args.top_k} overlap with most frequent words: "
           f"{len(set(top_ft) & set(top_freq))}/{args.top_k}")
+    # The paper's attribution sums saliency over a word's subword tokens, so words that split
+    # into more tokens accumulate more of it regardless of meaning. Quantify that confound.
+    ntok = [len(tokenizer(" " + w)["input_ids"]) for w in common]
+    rho_tok, p_tok = stats.spearmanr([ft_attr[w] for w in common], ntok)
+    print(f"  Spearman(attribution, subword count)    = {rho_tok:+.3f}  p={p_tok:.3g}")
     results["frequency_baseline"] = {
         "spearman_rho": float(rho), "spearman_p": float(p_rho),
         "top_overlap": len(set(top_ft) & set(top_freq)),
+        "spearman_subword_rho": float(rho_tok), "spearman_subword_p": float(p_tok),
     }
 
     # ---- cross-condition comparison against the fine-tuned condition ----

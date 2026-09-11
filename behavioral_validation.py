@@ -5,7 +5,7 @@ shows that editing a user profile moves its internal representation. This script
 the behaviourally meaningful question that movement alone does not answer: does the edit
 move the model's *predicted ratings and rankings* toward the edited target genre?
 
-It reports three analyses:
+It reports four analyses:
 
   1. `--run-variance`   Decomposes the variance of predicted ratings over a
                         profile x item grid into item, profile, and interaction
@@ -17,6 +17,10 @@ It reports three analyses:
                         and therefore isolates the profile x item interaction.
   3. `--run-sanity`     Predictive sanity check against ground-truth ratings, so effect
                         sizes can be read relative to the model's actual dynamic range.
+  4. `--run-diagnostics`
+                        Reports the input-side constraints that bound the results: the
+                        length gap between probe and training profiles, and how much of
+                        each item description the 300-token limit truncates.
 
 Note on model choice: pass a checkpoint trained with `--context_out "item title and
 description"` for any content-matching analysis. A title-only checkpoint never observes
@@ -26,14 +30,13 @@ report a null for that reason alone.
 Example:
     python behavioral_validation.py \
         --model_path out/amazon-out-reproduce-profile-title-and-description \
-        --run-variance --run-steering --run-sanity
+        --run-variance --run-steering --run-sanity --run-diagnostics
 """
 
 import argparse
 import json
 import os
 import random
-import re
 
 import numpy as np
 import torch
@@ -167,6 +170,48 @@ def predict_ratings(model, tokenizer, prompts, device, batch_size=16, max_length
     return np.asarray(out)
 
 
+def run_diagnostics(tokenizer, args, title_to_desc, pools):
+    """Reports the two input-side constraints that bound every result below.
+
+    Probe profiles written by hand are typically far shorter than the profiles the model was
+    fine-tuned on, and the 300-token prompt limit truncates part of each item description --
+    the very text a content-matching effect would have to be computed from.
+    """
+    print("\n=== Input diagnostics ===")
+    profiles = [p["profile"] for p in json.load(open(args.profiles, encoding="utf-8"))]
+    lengths = sorted(len(p.split()) for p in profiles)
+    median = lengths[len(lengths) // 2]
+    print(f"  training profiles: n={len(lengths)}  words min={lengths[0]} "
+          f"median={median} max={lengths[-1]}")
+    for state, text in PERTURBATION_STATES.items():
+        print(f"    perturbation state '{state}': {len(text.split())} words")
+
+    if title_to_desc is None:
+        print("  (item descriptions unused in this configuration; no truncation to report)")
+        return {"profile_median_words": int(median)}
+
+    profile = PERTURBATION_STATES["strong"]
+    prefix = (f"Input Context: {profile} Based on the input context, from a scale of 1 to 5 "
+              f"(1 being the lowest and 5 being the highest), I would give \"")
+    n_prefix = len(tokenizer(prefix)["input_ids"])
+    n_over, lost = 0, []
+    sample = pools["crime"][:60]
+    for title in sample:
+        full = build_prompt(profile, title, title_to_desc)
+        n_full = len(tokenizer(full)["input_ids"])
+        if n_full > args.max_length:
+            n_over += 1
+            desc_total = len(tokenizer(title_to_desc.get(title, ""))["input_ids"])
+            kept = max(0, args.max_length - n_prefix - len(tokenizer(title)["input_ids"]))
+            lost.append(1 - kept / max(1, desc_total))
+    mean_lost = float(np.mean(lost)) if lost else 0.0
+    print(f"  prompt prefix consumes {n_prefix} of {args.max_length} tokens")
+    print(f"  prompts over the {args.max_length}-token limit: {n_over}/{len(sample)}")
+    print(f"  mean fraction of the item description truncated away: {100 * mean_lost:.1f}%")
+    return {"profile_median_words": int(median), "prefix_tokens": int(n_prefix),
+            "frac_over_limit": n_over / len(sample), "mean_description_lost": mean_lost}
+
+
 def run_sanity(model, tokenizer, args, device, title_to_desc):
     """Predictive sanity check: correlation and error against ground-truth test ratings."""
     print("\n=== Predictive sanity check ===")
@@ -180,7 +225,7 @@ def run_sanity(model, tokenizer, args, device, title_to_desc):
 
     prompts = [build_prompt(profiles[e["user"]], e.get("title", "this item"), title_to_desc)
                for e in sample]
-    preds = predict_ratings(model, tokenizer, prompts, device, args.batch_size)
+    preds = predict_ratings(model, tokenizer, prompts, device, args.batch_size, args.max_length)
     labels = np.asarray([float(e["label"]) for e in sample])
 
     rmse = float(np.sqrt(((preds - labels) ** 2).mean()))
@@ -328,16 +373,20 @@ def main():
     parser.add_argument("--n_sanity", type=int, default=300)
     parser.add_argument("--top_k", type=int, default=50)
     parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--max_length", type=int, default=300,
+                        help="prompt truncation length; matches train.py / evaluate.py")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--output", type=str, default="results/behavioral_validation.json")
     parser.add_argument("--run-variance", dest="run_variance", action="store_true")
     parser.add_argument("--run-steering", dest="run_steering", action="store_true")
     parser.add_argument("--run-sanity", dest="run_sanity", action="store_true")
+    parser.add_argument("--run-diagnostics", dest="run_diagnostics", action="store_true")
     args = parser.parse_args()
 
-    if not (args.run_variance or args.run_steering or args.run_sanity):
+    if not (args.run_variance or args.run_steering or args.run_sanity or args.run_diagnostics):
         args.run_variance = args.run_steering = args.run_sanity = True
+        args.run_diagnostics = True
 
     if args.output:
         out_dir = os.path.dirname(args.output)
@@ -360,6 +409,8 @@ def main():
 
     results = {"model_path": args.model_path, "item_context": args.item_context, "seed": args.seed}
 
+    if args.run_diagnostics:
+        results["diagnostics"] = run_diagnostics(tokenizer, args, title_to_desc, pools)
     if args.run_sanity:
         run_sanity(model, tokenizer, args, device, title_to_desc)
     if args.run_variance:
