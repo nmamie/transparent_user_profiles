@@ -6,7 +6,7 @@ distinguish an effect of fine-tuning from a property of the architecture, of the
 backbone, or of the profile corpus itself. This script runs the missing controls:
 
   finetuned            the fine-tuned regression checkpoint (the condition reported in the paper)
-  pretrained_backbone  pretrained GPT-2 with a randomly initialised regression head
+  pretrained_backbone  pretrained GPT-2 with a randomly initialized regression head
                        -> isolates what fine-tuning contributes over the backbone
   random_init          the same architecture with no pretrained weights at all
                        -> isolates what the architecture alone contributes
@@ -64,7 +64,7 @@ def resolve_device(device=None):
 def build_model(condition, finetuned_path, base_model, device, tokenizer, seed):
     """Builds the scoring model for a condition.
 
-    All conditions share the fine-tuned checkpoint's tokenizer so that tokenisation, and
+    All conditions share the fine-tuned checkpoint's tokenizer so that tokenization, and
     therefore the set of attributable words, is identical across conditions.
     """
     if condition in ("finetuned", "finetuned_shuffled"):
@@ -210,7 +210,7 @@ def main():
     profiles = [p["profile"] for p in profiles_data]
     user_ids = [p["user_id"] for p in profiles_data]
 
-    # per-user item title, matching compute_global_attribution's behaviour
+    # per-user item title, matching compute_global_attribution's behavior
     user_items = {}
     if os.path.exists(args.user_items):
         user_items = json.load(open(args.user_items, encoding="utf-8"))

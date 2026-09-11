@@ -6,7 +6,7 @@ we care about -- whether a user's preference can be moved in latent space to cha
 recommended. This script separates the steps:
 
   --run-probe      Is genre linearly decodable from a profile representation? Users are
-                   labelled by the dominant genre of their *actual* review history, not by
+                   labeled by the dominant genre of their *actual* review history, not by
                    reading terms off a cluster, so this also validates the taste-archetype
                    labels the UMAP figure asserts.
   --run-clusters   Do the unsupervised clusters correspond to history-derived genre
@@ -17,7 +17,7 @@ recommended. This script separates the steps:
   --run-checks     Verifies that the interventions propagate at all: a zero vector and a
                    constant vector must both be no-ops, a random direction must not be.
   --run-personalization
-                   Does the model personalise at all? Rank each user's held-out item against
+                   Does the model personalize at all? Rank each user's held-out item against
                    random catalog items.
 
 Two implementation notes. Representations match `embed_profiles_single` in
@@ -68,10 +68,10 @@ def genre_of_item(title, description):
     return hits[0] if len(hits) == 1 else None
 
 
-def label_users_by_history(user_items, min_labelled=3, dominance=0.5):
+def label_users_by_history(user_items, min_labeled=3, dominance=0.5):
     """Assigns each user the dominant genre of their review history.
 
-    A user is kept only if at least `min_labelled` of their items carry a genre and one genre
+    A user is kept only if at least `min_labeled` of their items carry a genre and one genre
     accounts for at least `dominance` of them, so labels are decisive rather than marginal.
     """
     labels = {}
@@ -82,7 +82,7 @@ def label_users_by_history(user_items, min_labelled=3, dominance=0.5):
             if g:
                 counts[g] += 1
         total = sum(counts.values())
-        if total < min_labelled:
+        if total < min_labeled:
             continue
         genre, n = counts.most_common(1)[0]
         if n / total >= dominance:
@@ -256,8 +256,8 @@ def run_clusters(reps, labels, n_clusters, seed):
     ari = adjusted_rand_score(y, assign)
     nmi = normalized_mutual_info_score(y, assign)
     print(f"  Adjusted Rand Index : {ari:.4f}   (0 = chance)")
-    print(f"  Normalised MI       : {nmi:.4f}")
-    print("  per-cluster genre composition (share of labelled users):")
+    print(f"  Normalized MI       : {nmi:.4f}")
+    print("  per-cluster genre composition (share of labeled users):")
     for c in range(n_clusters):
         m = assign == c
         if m.sum() == 0:
@@ -270,7 +270,7 @@ def run_clusters(reps, labels, n_clusters, seed):
 
 
 def run_steering(model, tokenizer, args, device, title_to_desc, pools, reps, labels, probe):
-    """Injects the crime-minus-romance direction and measures latent and behavioural response."""
+    """Injects the crime-minus-romance direction and measures latent and behavioral response."""
     print("\n=== Activation steering ===")
 
     # analytic note, verified numerically: additive steering after ln_f is item-independent
@@ -325,7 +325,7 @@ def run_steering(model, tokenizer, args, device, title_to_desc, pools, reps, lab
             proba = probe.predict_proba(scaler.transform(steered_rep))[0]
             p_map = dict(zip(probe.classes_, proba))
 
-            # (b) behavioural check -- ratings and ranking over the pooled candidate set
+            # (b) behavioral check -- ratings and ranking over the pooled candidate set
             ratings = {}
             for g in GENRES:
                 prompts = [build_prompt(base_profile, t, title_to_desc) for t in pools[g]]
@@ -352,7 +352,7 @@ def run_steering(model, tokenizer, args, device, title_to_desc, pools, reps, lab
 
 def run_personalization(model, tokenizer, args, device, title_to_desc):
     """Can the model rank a user's held-out item above random catalog items?"""
-    print("\n=== Personalisation check (held-out item vs random items) ===")
+    print("\n=== Personalization check (held-out item vs random items) ===")
     profiles = {p["user_id"]: p["profile"] for p in json.load(open(args.profiles, encoding="utf-8"))}
     with open(os.path.join(args.dataset_dir, "test.jsonl"), encoding="utf-8") as f:
         test = [json.loads(line) for line in f]

@@ -233,7 +233,7 @@ python user_profile_interpretability.py \
 
 ---
 
-## 🧭 Behavioural Validation of Profile Steering
+## 🧭 Behavioral Validation of Profile Steering
 
 The interpretability analyses above establish that profile edits move the model's *internal
 representation*. The scripts in this section test whether that movement changes the model's
@@ -251,7 +251,7 @@ python behavioral_validation.py \
   --run-variance --run-steering --run-sanity --run-diagnostics
 ```
 `--run-variance` splits predicted-rating variance into item, profile, and profile×item interaction
-terms; `--run-steering` scores genre-labelled item pools under each perturbation state and tests for
+terms; `--run-steering` scores genre-labeled item pools under each perturbation state and tests for
 a genre-selective shift in rating and in rank; `--run-sanity` checks predictive accuracy against
 ground truth; `--run-diagnostics` reports the profile length gap and description truncation rate.
 
@@ -266,7 +266,7 @@ direction into the residual stream to test for a causal effect, and checks wheth
 rank a held-out item above random items. Run `--run-checks` first: it verifies that interventions
 propagate, so a null cannot be a silent no-op.
 
-### 3. Baseline control for the personalisation test (`personalization_baselines.py`)
+### 3. Baseline control for the personalization test (`personalization_baselines.py`)
 ```bash
 python personalization_baselines.py --dataset Amazon/MoviesAndTV --n_users 200
 ```
@@ -277,7 +277,7 @@ fine-tuned profile model, establishing whether the ranking task is feasible on t
 ```bash
 python attribution_controls.py --max_examples 60
 ```
-Repeats the global attribution analysis on an untrained backbone, a randomly initialised model, and
+Repeats the global attribution analysis on an untrained backbone, a randomly initialized model, and
 word-shuffled profiles, and compares all of them against corpus-frequency and subword-count
 baselines, to separate effects of fine-tuning from properties of the architecture and the corpus.
 

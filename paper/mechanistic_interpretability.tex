@@ -1,207 +1,70 @@
 % ---------------------------------------------------------------------------------------
 % Revised mechanistic interpretability section.
 %
-% Every number below is reproduced by the scripts in the repository root:
-%   behavioral_validation.py       --run-variance --run-steering --run-sanity --run-diagnostics
-%   latent_steering.py             --run-checks --run-probe --run-clusters --run-steering
-%   personalization_baselines.py   --n_users 200 [--item_context "item title"]
-%   attribution_controls.py        --max_examples 60
-% Results are written to results/*.json.
+% Every number below is reproduced by the scripts in the repository root: behavioral_validation.py       --run-variance --run-steering --run-sanity --run-diagnostics latent_steering.py             --run-checks --run-probe --run-clusters --run-steering personalization_baselines.py   --n_users 200 [--item_context "item title"] attribution_controls.py        --max_examples 60 Results are written to results/*.json.
 % ---------------------------------------------------------------------------------------
 
 \subsection{Mechanistic Interpretability}
 
-To investigate how the fine-tuned recommender model internalizes textual user profiles and
-responds to user interventions, we perform mechanistic interpretability probing using
-\texttt{nnsight} (see Appendix~\ref{sec:appendix_interp} for full setup). Specifically, we probe
-the final normalized layer of the transformer backbone, extracting mean-pooled hidden activation
-vectors $\mathbf{h}_u \in \mathbb{R}^d$ across all user profile prompts. Probing this final layer
-directly captures the model's final representation state before classification.
+To investigate how the fine-tuned recommender model internalizes textual user profiles and responds to user interventions, we perform mechanistic interpretability probing using \texttt{nnsight} (see Appendix~\ref{sec:appendix_interp} for full setup). Specifically, we probe the final normalized layer of the transformer backbone, extracting mean-pooled hidden activation vectors $\mathbf{h}_u \in \mathbb{R}^d$ across all user profile prompts. Probing this final layer directly captures the model's final representation state before classification.
 
-Our analysis proceeds in three stages. We first characterise the representational structure of
-natural-language profiles and confirm that user edits move that representation
-(\S\ref{sec:repr_structure}). We then ask whether this movement changes the model's predictions,
-using both textual edits and direct activation steering (\S\ref{sec:repr_to_behaviour}). Finding
-that it does not, we isolate the cause by asking whether the model personalises at all, and
-comparing it against collaborative-filtering baselines on identical candidate sets
-(\S\ref{sec:personalisation}). Throughout we report the controls that separate genuine effects of
-fine-tuning from properties of the architecture, the pretrained backbone and the corpus.
+Our analysis proceeds in three stages. We first characterize the representational structure of natural-language profiles and confirm that user edits move that representation (\S\ref{sec:repr_structure}). We then ask whether this movement changes the model's predictions, using both textual edits and direct activation steering (\S\ref{sec:repr_to_behavior}). Finding that it does not, we isolate the cause by asking whether the model personalizes at all, and comparing it against collaborative-filtering baselines on identical candidate sets (\S\ref{sec:personalization}). Throughout we report the controls that separate genuine effects of fine-tuning from properties of the architecture, the pretrained backbone and the corpus.
 
 \subsubsection{Representational structure and profile edits}
 \label{sec:repr_structure}
 
-As illustrated in Figure~\ref{fig:perturbation}, natural-language user profiles form well-separated
-groups in the model's 2D UMAP activation space. Figure~\ref{fig:perturbation} additionally tracks
-the representation trajectory under counterfactual profile perturbations across three sequential
-states (detailed in Table~\ref{tab:profile_perturbations}):
+As illustrated in Figure~\ref{fig:perturbation}, natural-language user profiles form well-separated groups in the model's 2D UMAP activation space. Figure~\ref{fig:perturbation} additionally tracks the representation trajectory under counterfactual profile perturbations across three sequential states (detailed in Table~\ref{tab:profile_perturbations}):
 
 \begin{enumerate}
     \item \textbf{State 1 (Baseline Profile):} An unedited user profile expressing a preference for
-          lighthearted romantic comedies.
+lighthearted romantic comedies.
     \item \textbf{State 2 (Weak Perturbation):} A modified profile shifting the user's interests
-          towards the action domain.
+toward the action domain.
     \item \textbf{State 3 (Strong Perturbation):} A heavily edited profile specifying a strong
-          preference for dark crime, mystery thrillers, and detective investigations.
+preference for dark crime, mystery thrillers, and detective investigations.
 \end{enumerate}
 
-When a user modifies their profile, we re-embed the perturbed text and trace the latent trajectory
-vector ($\Delta d$). These edits produce smooth, continuous and directional shifts in the
-activation space: textual interventions do measurably change the model's internal representation of
-the user, rather than being absorbed without trace.
+When a user modifies their profile, we re-embed the perturbed text and trace the latent trajectory vector ($\Delta d$). These edits produce smooth, continuous and directional shifts in the activation space: textual interventions do measurably change the model's internal representation of the user, rather than being absorbed without trace.
 
-We caution against reading the cluster structure itself as a map of user taste. To test whether
-these groups correspond to preference rather than to profile wording, we labelled $1500$ users by
-the dominant genre of their \emph{actual} review history (romance $795$, crime $530$, action $175$;
-a user is retained only when at least three of their reviewed items carry a genre and one genre
-accounts for the majority of them) and compared those labels against $K$-means assignments over the
-same representations. Agreement is at chance: adjusted Rand index $0.0008$ and normalised mutual
-information $0.0038$, with every cluster reproducing the population base rate to within a few
-percentage points (each contains $46$--$59\%$ romance users). A linear probe trained to recover the
-same history-derived label reaches $0.449$ accuracy against a $0.530$ majority-class baseline; it
-exceeds a shuffled-label control ($0.406$), and its macro-F1 of $0.356$ exceeds the $0.231$ a
-constant predictor achieves, so the representation is not entirely uninformative about genre
-preference, but the signal is too weak to beat majority-class accuracy. The clusters in
-Figure~\ref{fig:perturbation} therefore organise profiles by lexical content, and the archetype
-labels should be read as descriptions of profile language rather than as validated taste segments.
+We caution against reading the cluster structure itself as a map of user taste. To test whether these groups correspond to preference rather than to profile wording, we labeled $1500$ users by the dominant genre of their \emph{actual} review history (romance $795$, crime $530$, action $175$; a user is retained only when at least three of their reviewed items carry a genre and one genre accounts for the majority of them) and compared those labels against $K$-means assignments over the same representations. Agreement is at chance: adjusted Rand index $0.0008$ and normalized mutual information $0.0038$, with every cluster reproducing the population base rate to within a few percentage points (each contains $46$--$59\%$ romance users). A linear probe trained to recover the same history-derived label reaches $0.449$ accuracy against a $0.530$ majority-class baseline; it exceeds a shuffled-label control ($0.406$), and its macro-F1 of $0.356$ exceeds the $0.231$ a constant predictor achieves, so the representation is not entirely uninformative about genre preference, but the signal is too weak to beat majority-class accuracy. The clusters in Figure~\ref{fig:perturbation} therefore organize profiles by lexical content, and the archetype labels should be read as descriptions of profile language rather than as validated taste segments.
 
-\subsubsection{From representation to behaviour}
-\label{sec:repr_to_behaviour}
+\subsubsection{From representation to behavior}
+\label{sec:repr_to_behavior}
 
-Movement in representation space does not entail a change in recommendations. We therefore test the
-behaviourally meaningful question directly.
+Movement in representation space does not entail a change in recommendations. We therefore test the behaviorally meaningful question directly.
 
 \paragraph{What drives a prediction.}
-Table~\ref{tab:variance_decomposition} decomposes the variance of predicted ratings over a grid of
-real profiles and catalog items. The natural-language profile is far from inert, accounting for
-$47.6$--$48.5\%$ of the variance, comparable to item identity itself. It enters, however, almost
-entirely as a \emph{user-level rating offset} -- an estimate of how generously a given user rates in
-general -- rather than as a key matched against item content. Content-based personalisation must
-live in the profile\,$\times$\,item interaction term, and that term accounts for only $4.1\%$ of the
-variance when the model observes item titles alone, rising to $16.1\%$ once item descriptions are
-also supplied. This bounds how much of the model's behaviour any content-conditioned steering could
-possibly explain, and it motivates using the title-and-description configuration for every
-content-matching analysis that follows: a title-only model never observes the genre evidence such an
-effect would have to be computed from.
+Table~\ref{tab:variance_decomposition} decomposes the variance of predicted ratings over a grid of real profiles and catalog items. The natural-language profile is far from inert, accounting for $47.6$--$48.5\%$ of the variance, comparable to item identity itself. It enters, however, almost entirely as a \emph{user-level rating offset} -- an estimate of how generously a given user rates in general -- rather than as a key matched against item content. Content-based personalization must live in the profile\,$\times$\,item interaction term, and that term accounts for only $4.1\%$ of the variance when the model observes item titles alone, rising to $16.1\%$ once item descriptions are also supplied. This bounds how much of the model's behavior any content-conditioned steering could possibly explain, and it motivates using the title-and-description configuration for every content-matching analysis that follows: a title-only model never observes the genre evidence such an effect would have to be computed from.
 
 \paragraph{Textual edits.}
-We assemble three genre pools (romance, action, crime) of $N{=}110$ catalog items each by weak
-supervision over item descriptions, and score all $330$ candidates under each perturbation state.
-Each state is expressed at the length of a real training profile, since the profiles used for
-Figure~\ref{fig:perturbation} are $11$--$16$ words against a training median of $87$
-(range $23$--$167$), and therefore fall below anything the model saw during fine-tuning.
-Table~\ref{tab:behavioral_validation} reports the outcome. Editing the profile shifts predicted
-ratings substantially and highly significantly ($+0.195$ at State~2, $+0.070$ at State~3, both
-$p<10^{-9}$), but the shift is statistically indistinguishable across the three genre pools
-(one-way ANOVA, $p{=}0.79$ and $p{=}0.60$). The residual differences point in the direction the
-steering hypothesis predicts -- under the crime-targeting edit crime items receive the largest gain
-($+0.086$ against $+0.059$ for romance) and are the only pool to move \emph{up} the ranking
-($-3.9$ of $330$ positions, while action items fall by $3.9$) -- yet no contrast approaches
-significance (crime against romance, one-sided $p{=}0.15$ for $\Delta\hat{r}$ and $p{=}0.31$ for
-$\Delta$Rank), and the crime share of the top-$50$ recommendations moves only from $28\%$ to $30\%$.
-A borderline result obtained at $N{=}40$ did not survive tripling the sample size.
+We assemble three genre pools (romance, action, crime) of $N{=}110$ catalog items each by weak supervision over item descriptions, and score all $330$ candidates under each perturbation state. Each state is expressed at the length of a real training profile, since the profiles used for Figure~\ref{fig:perturbation} are $11$--$16$ words against a training median of $87$ (range $23$--$167$), and therefore fall below anything the model saw during fine-tuning. Table~\ref{tab:behavioral_validation} reports the outcome. Editing the profile shifts predicted ratings substantially and highly significantly ($+0.195$ at State~2, $+0.070$ at State~3, both $p<10^{-9}$), but the shift is statistically indistinguishable across the three genre pools (one-way ANOVA, $p{=}0.79$ and $p{=}0.60$). The residual differences point in the direction the steering hypothesis predicts -- under the crime-targeting edit crime items receive the largest gain ($+0.086$ against $+0.059$ for romance) and are the only pool to move \emph{up} the ranking ($-3.9$ of $330$ positions, while action items fall by $3.9$) -- yet no contrast approaches significance (crime against romance, one-sided $p{=}0.15$ for $\Delta\hat{r}$ and $p{=}0.31$ for $\Delta$Rank), and the crime share of the top-$50$ recommendations moves only from $28\%$ to $30\%$. A borderline result obtained at $N{=}40$ did not survive tripling the sample size.
 
 \paragraph{Direct activation steering.}
-A textual edit reaches behaviour through two steps, and the preceding result does not say which one
-fails. We therefore intervene on the representation itself, adding $\alpha \mathbf{d}$ to the
-residual stream at the profile token positions, where $\mathbf{d}$ is the difference of means
-between the layer activations of crime-preferring and romance-preferring users. Before interpreting
-any null we verify that the intervention propagates: a zero vector leaves the prediction exactly
-unchanged, a \emph{constant} vector also leaves it unchanged because layer normalisation removes it
-(so a steering direction must be non-uniform across dimensions), and a random direction does change
-it. We further note that additive steering of the final representation cannot be selective at all:
-the head is a single linear map, so $\mathbf{h} \mapsto \mathbf{h} + \alpha\mathbf{d}$ shifts every
-item's prediction by the same $\alpha(\mathbf{w}\cdot\mathbf{d})$ and leaves the ranking untouched
-(verified numerically to six decimal places). Steering must therefore be applied early enough to
-interact with the item tokens through attention, which is what we do.
+A textual edit reaches behavior through two steps, and the preceding result does not say which one fails. We therefore intervene on the representation itself, adding $\alpha \mathbf{d}$ to the residual stream at the profile token positions, where $\mathbf{d}$ is the difference of means between the layer activations of crime-preferring and romance-preferring users. Before interpreting any null we verify that the intervention propagates: a zero vector leaves the prediction exactly unchanged, a \emph{constant} vector also leaves it unchanged because layer normalization removes it (so a steering direction must be non-uniform across dimensions), and a random direction does change it. We further note that additive steering of the final representation cannot be selective at all: the head is a single linear map, so $\mathbf{h} \mapsto \mathbf{h} + \alpha\mathbf{d}$ shifts every item's prediction by the same $\alpha(\mathbf{w}\cdot\mathbf{d})$ and leaves the ranking untouched (verified numerically to six decimal places). Steering must therefore be applied early enough to interact with the item tokens through attention, which is what we do.
 
-Table~\ref{tab:steering} reports the result, and it is a clean dissociation. The intervention moves
-the latent state exactly as intended: the probe readout goes from $P(\text{crime}){=}0.064$ at
-$\alpha{=}0$ to $1.000$ at $\alpha{\geq}4$, a complete reversal of the user's apparent genre
-preference. The recommendations do not follow. Crime items' mean predicted rating \emph{falls}
-slightly ($3.999 \rightarrow 3.984$) and their mean rank moves by at most $0.2$ of $330$ positions,
-at every layer tested. We note that the probe reversal is in part guaranteed by construction, since
-the injected direction is the same class-mean difference the probe reads; the behavioural null is
-the finding. Driving the representation from one genre pole to the other, by the most direct means
-available, changes essentially nothing about what the model recommends.
+Table~\ref{tab:steering} reports the result, and it is a clean dissociation. The intervention moves the latent state exactly as intended: the probe readout goes from $P(\text{crime}){=}0.064$ at $\alpha{=}0$ to $1.000$ at $\alpha{\geq}4$, a complete reversal of the user's apparent genre preference. The recommendations do not follow. Crime items' mean predicted rating \emph{falls} slightly ($3.999 \rightarrow 3.984$) and their mean rank moves by at most $0.2$ of $330$ positions, at every layer tested. We note that the probe reversal is in part guaranteed by construction, since the injected direction is the same class-mean difference the probe reads; the behavioral null is the finding. Driving the representation from one genre pole to the other, by the most direct means available, changes essentially nothing about what the model recommends.
 
-\subsubsection{Does the model personalise at all?}
-\label{sec:personalisation}
+\subsubsection{Does the model personalize at all?}
+\label{sec:personalization}
 
-The preceding nulls admit a simpler explanation than a failure of steering: the model may carry no
-usable personalisation signal to steer. We test this with a task the reported metrics do not probe.
-For each of $200$ users we take one held-out item they rated positively and $99$ catalog items they
-never interacted with, and ask each ranker to place the held-out item within that set. A percentile
-of $0.5$ is chance. Crucially, all rankers see identical candidate sets.
+The preceding nulls admit a simpler explanation than a failure of steering: the model may carry no usable personalization signal to steer. We test this with a task the reported metrics do not probe. For each of $200$ users we take one held-out item they rated positively and $99$ catalog items they never interacted with, and ask each ranker to place the held-out item within that set. A percentile of $0.5$ is chance. Crucially, all rankers see identical candidate sets.
 
-Table~\ref{tab:personalisation} shows that the task is very much feasible on this data: BPR reaches
-$0.867$ and WMF $0.806$. The profile model reaches $0.542$ in its title-only configuration
-($p{=}0.047$) and $0.510$ with descriptions ($p{=}0.62$, not significant). It is therefore
-marginally above chance at best, and is outperformed by \texttt{MostPop} ($0.697$), which performs
-no personalisation whatsoever. Consistent with this, the profile model's scores are uncorrelated
-with item popularity (Spearman $-0.03$ to $-0.08$, both $n.s.$) even though the held-out positives
-are substantially more popular than the distractors ($81.6$ against $41.9$ training interactions),
-so it fails to exploit even the popularity signal available in the candidate sets.
+Table~\ref{tab:personalization} shows that the task is very much feasible on this data: BPR reaches $0.867$ and WMF $0.806$. The profile model reaches $0.542$ in its title-only configuration ($p{=}0.047$) and $0.510$ with descriptions ($p{=}0.62$, not significant). It is therefore marginally above chance at best, and is outperformed by \texttt{MostPop} ($0.697$), which performs no personalization whatsoever. Consistent with this, the profile model's scores are uncorrelated with item popularity (Spearman $-0.03$ to $-0.08$, both $n.s.$) even though the held-out positives are substantially more popular than the distractors ($81.6$ against $41.9$ training interactions), so it fails to exploit even the popularity signal available in the candidate sets.
 
-The ordering in Table~\ref{tab:personalisation} identifies the cause. Models trained with a ranking
-objective (BPR, WMF) reach $0.81$--$0.87$; models trained to regress observed ratings (MF, and the
-profile model in both configurations) reach $0.51$--$0.55$. MF and BPR consume exactly the same
-interaction data and differ only in their loss, so that gap isolates the objective rather than the
-information available. The profile model lands precisely where the other rating-regression model
-does. This is the expected consequence of the training signal: every training pair is an item the
-user actually chose and reviewed, so the data contains no mismatched user--item pairs from which a
-content-matching rule could be learned, and the loss is minimised instead by predicting a user's
-general rating level together with an item-specific offset -- exactly the structure
-Table~\ref{tab:variance_decomposition} exhibits.
+The ordering in Table~\ref{tab:personalization} identifies the cause. Models trained with a ranking objective (BPR, WMF) reach $0.81$--$0.87$; models trained to regress observed ratings (MF, and the profile model in both configurations) reach $0.51$--$0.55$. MF and BPR consume exactly the same interaction data and differ only in their loss, so that gap isolates the objective rather than the information available. The profile model lands precisely where the other rating-regression model does. This is the expected consequence of the training signal: every training pair is an item the user actually chose and reviewed, so the data contains no mismatched user--item pairs from which a content-matching rule could be learned, and the loss is minimized instead by predicting a user's general rating level together with an item-specific offset -- exactly the structure Table~\ref{tab:variance_decomposition} exhibits.
 
-This also explains why the finding is compatible with the ranking metrics reported in
-\S\ref{sec:results}. Those use test-set reranking over the Sakai condensed list, which orders only
-items the user already selected. Ordering a pre-filtered set of chosen items is achievable from
-item-side priors alone and does not require distinguishing relevant from irrelevant candidates. The
-limitation we identify is therefore a property of the rating-regression objective inherited from the
-original formulation, not of natural-language profiles as an interface: on the same data, a ranking
-objective attains $0.87$.
+This also explains why the finding is compatible with the ranking metrics reported in \S\ref{sec:results}. Those use test-set reranking over the Sakai condensed list, which orders only items the user already selected. Ordering a pre-filtered set of chosen items is achievable from item-side priors alone and does not require distinguishing relevant from irrelevant candidates. The limitation we identify is therefore a property of the rating-regression objective inherited from the original formulation, not of natural-language profiles as an interface: on the same data, a ranking objective attains $0.87$.
 
 \subsubsection{Controls for the attribution analysis}
 \label{sec:attribution_controls}
 
-Figures~\ref{fig:attribution} and~\ref{fig:global_attribution} report token-level gradient
-attribution over profile tokens. Because such a pattern could equally reflect the architecture, the
-pretrained backbone or the profile corpus, we repeat the global analysis under three controls -- the
-pretrained GPT-2 backbone with a randomly initialised regression head, the same architecture with no
-pretrained weights, and the fine-tuned model applied to word-shuffled profiles -- and compare all of
-them against corpus-frequency and subword-count baselines. Since gradient magnitudes are not
-comparable across differently scaled models, we summarise each condition by a scale-invariant
-statistic: the ratio of mean attribution on a fixed a-priori genre lexicon to mean attribution on
-all remaining profile words.
+Figures~\ref{fig:attribution} and~\ref{fig:global_attribution} report token-level gradient attribution over profile tokens. Because such a pattern could equally reflect the architecture, the pretrained backbone or the profile corpus, we repeat the global analysis under three controls -- the pretrained GPT-2 backbone with a randomly initialized regression head, the same architecture with no pretrained weights, and the fine-tuned model applied to word-shuffled profiles -- and compare all of them against corpus-frequency and subword-count baselines. Since gradient magnitudes are not comparable across differently scaled models, we summarize each condition by a scale-invariant statistic: the ratio of mean attribution on a fixed a-priori genre lexicon to mean attribution on all remaining profile words.
 
-Table~\ref{tab:attribution_controls} reports the outcome, and it does not support reading these
-figures as evidence that fine-tuning concentrates attribution on preference features. In the
-fine-tuned model, genre words receive roughly \emph{half} the attribution of other profile words
-(ratio $0.546$, $p{=}0.002$), and no genre term appears among the top $20$; that list is led by
-\texttt{widescreen} together with discourse and style words (\texttt{however}, \texttt{while},
-\texttt{including}, \texttt{levity}, \texttt{cinematography}, \texttt{soundtracks}). Eleven of those
-top $20$ words recur in a \emph{randomly initialised} model, and attribution correlates at
-$\rho{=}0.807$ with the fine-tuned model applied to word-shuffled profiles, indicating that the
-pattern is driven by which words are present rather than by their arrangement or meaning. Attribution
-is moreover negatively correlated with corpus frequency ($\rho{=}-0.320$, $p{=}0.027$), i.e.\ it
-tracks word rarity; the number of subword tokens per word is not a significant driver
-($\rho{=}0.212$, $p{=}0.148$). We therefore treat these figures as descriptive of the saliency
-method's behaviour and do not claim that they isolate features acquired through fine-tuning.
+Table~\ref{tab:attribution_controls} reports the outcome, and it does not support reading these figures as evidence that fine-tuning concentrates attribution on preference features. In the fine-tuned model, genre words receive roughly \emph{half} the attribution of other profile words (ratio $0.546$, $p{=}0.002$), and no genre term appears among the top $20$; that list is led by \texttt{widescreen} together with discourse and style words (\texttt{however}, \texttt{while}, \texttt{including}, \texttt{levity}, \texttt{cinematography}, \texttt{soundtracks}). Eleven of those top $20$ words recur in a \emph{randomly initialized} model, and attribution correlates at $\rho{=}0.807$ with the fine-tuned model applied to word-shuffled profiles, indicating that the pattern is driven by which words are present rather than by their arrangement or meaning. Attribution is moreover negatively correlated with corpus frequency ($\rho{=}-0.320$, $p{=}0.027$), i.e.\ it tracks word rarity; the number of subword tokens per word is not a significant driver ($\rho{=}0.212$, $p{=}0.148$). We therefore treat these figures as descriptive of the saliency method's behavior and do not claim that they isolate features acquired through fine-tuning.
 
 \subsubsection{Summary}
 
-Taken together, the picture is coherent. Profile edits do move the model's internal representation,
-and that movement is smooth and directional (\S\ref{sec:repr_structure}). But the representation
-organises profiles lexically rather than by validated taste, the genre axis it contains is weak, and
-driving that axis from one pole to the other -- whether through text or through direct activation
-steering -- leaves recommendations essentially unchanged (\S\ref{sec:repr_to_behaviour}). The reason
-is that the model carries little usable personalisation signal to begin with: it is outperformed by
-item popularity on a held-out ranking task that a ranking-objective baseline solves at $0.87$
-(\S\ref{sec:personalisation}). Scrutability, in this formulation, gives a user control over how
-generously they are modelled rather than over what they are recommended. We read this as a
-constraint of the rating-regression objective rather than of editable natural-language profiles, and
-a concrete direction for future work: training the same interface against a ranking objective, with
-negative sampling, is the change most likely to make profile edits behaviourally meaningful.
+Taken together, the picture is coherent. Profile edits do move the model's internal representation, and that movement is smooth and directional (\S\ref{sec:repr_structure}). But the representation organizes profiles lexically rather than by validated taste, the genre axis it contains is weak, and driving that axis from one pole to the other -- whether through text or through direct activation steering -- leaves recommendations essentially unchanged (\S\ref{sec:repr_to_behavior}). The reason is that the model carries little usable personalization signal to begin with: it is outperformed by item popularity on a held-out ranking task that a ranking-objective baseline solves at $0.87$ (\S\ref{sec:personalization}). Scrutability, in this formulation, gives a user control over how generously they are modeled rather than over what they are recommended. We read this as a constraint of the rating-regression objective rather than of editable natural-language profiles, and a concrete direction for future work: training the same interface against a ranking objective, with negative sampling, is the change most likely to make profile edits behaviorally meaningful.
 
 % ---------------------------------------------------------------------------------------
 % TABLES
@@ -210,12 +73,7 @@ negative sampling, is the change most likely to make profile edits behaviourally
 \begin{table}[t]
     \centering
     \small
-    \caption{Decomposition of the variance in predicted ratings $\hat{r}$ over a grid of 25 real
-    user profiles $\times$ 24 catalog items, for the two input configurations we fine-tune. The
-    natural-language profile accounts for roughly half of the variance in both configurations, but
-    acts predominantly as a \emph{user-level rating offset}: the profile\,$\times$\,item interaction
-    term, where content-based personalisation must live, accounts for only 4.1\% when the model sees
-    item titles alone and 16.1\% when it additionally sees item descriptions.}
+\caption{Decomposition of the variance in predicted ratings $\hat{r}$ over a grid of 25 real user profiles $\times$ 24 catalog items, for the two input configurations we fine-tune. The natural-language profile accounts for roughly half of the variance in both configurations, but acts predominantly as a \emph{user-level rating offset}: the profile\,$\times$\,item interaction term, where content-based personalization must live, accounts for only 4.1\% when the model sees item titles alone and 16.1\% when it additionally sees item descriptions.}
     \label{tab:variance_decomposition}
     \begin{tabular}{lccc}
     \toprule
@@ -230,15 +88,7 @@ negative sampling, is the change most likely to make profile edits behaviourally
 \begin{table*}[t]
     \centering
     \small
-    \caption{Behavioural validation of the counterfactual perturbation states in
-    Table~\ref{tab:profile_perturbations}. For each state we score $N{=}110$ catalog items per genre
-    pool ($330$ candidates) with the profile\,+\,title\,\&\,description model, reporting the mean
-    predicted rating $\hat{r}$, the mean rank within the pooled candidate set (lower is better), and
-    the change in each relative to State~1. Rank is invariant to a uniform additive shift in
-    $\hat{r}$ and therefore isolates the profile\,$\times$\,item interaction. Editing the profile
-    produces a large, highly significant \emph{uniform} shift, but no statistically detectable
-    \emph{genre-selective} effect in either metric: crime items show the largest gain and are the
-    only pool to move up the ranking, yet all between-genre contrasts are non-significant.}
+\caption{Behavioral validation of the counterfactual perturbation states in Table~\ref{tab:profile_perturbations}. For each state we score $N{=}110$ catalog items per genre pool ($330$ candidates) with the profile\,+\,title\,\&\,description model, reporting the mean predicted rating $\hat{r}$, the mean rank within the pooled candidate set (lower is better), and the change in each relative to State~1. Rank is invariant to a uniform additive shift in $\hat{r}$ and therefore isolates the profile\,$\times$\,item interaction. Editing the profile produces a large, highly significant \emph{uniform} shift, but no statistically detectable \emph{genre-selective} effect in either metric: crime items show the largest gain and are the only pool to move up the ranking, yet all between-genre contrasts are non-significant.}
     \label{tab:behavioral_validation}
     \begin{tabular}{lcccccc}
     \toprule
@@ -260,11 +110,7 @@ negative sampling, is the change most likely to make profile edits behaviourally
 \begin{table}[t]
     \centering
     \small
-    \caption{Direct activation steering at transformer block 6. Adding $\alpha\mathbf{d}$ to the
-    residual stream at the profile token positions, where $\mathbf{d}$ is the crime-minus-romance
-    difference of means, drives the probe readout across the full range while leaving predicted
-    ratings and rankings effectively unchanged. Blocks 2 and 9 behave identically. Rank is over the
-    same $330$-item candidate set as Table~\ref{tab:behavioral_validation}.}
+\caption{Direct activation steering at transformer block 6. Adding $\alpha\mathbf{d}$ to the residual stream at the profile token positions, where $\mathbf{d}$ is the crime-minus-romance difference of means, drives the probe readout across the full range while leaving predicted ratings and rankings effectively unchanged. Blocks 2 and 9 behave identically. Rank is over the same $330$-item candidate set as Table~\ref{tab:behavioral_validation}.}
     \label{tab:steering}
     \begin{tabular}{lccccc}
     \toprule
@@ -284,13 +130,8 @@ negative sampling, is the change most likely to make profile edits behaviourally
 \begin{table}[t]
     \centering
     \small
-    \caption{Percentile at which each ranker places a user's held-out positive item among $99$
-    items they never interacted with ($200$ users, identical candidate sets; $0.5$ is chance).
-    Baseline hyperparameters follow \texttt{rec\_baselines.py}. Models trained with a ranking
-    objective solve the task; models trained to regress observed ratings -- MF and the profile model
-    in both input configurations -- are barely above chance and are beaten by popularity alone. MF
-    and BPR see identical interaction data and differ only in their loss.}
-    \label{tab:personalisation}
+\caption{Percentile at which each ranker places a user's held-out positive item among $99$ items they never interacted with ($200$ users, identical candidate sets; $0.5$ is chance). Baseline hyperparameters follow \texttt{rec\_baselines.py}. Models trained with a ranking objective solve the task; models trained to regress observed ratings -- MF and the profile model in both input configurations -- are barely above chance and are beaten by popularity alone. MF and BPR see identical interaction data and differ only in their loss.}
+    \label{tab:personalization}
     \begin{tabular}{llcc}
     \toprule
     \textbf{Ranker} & \textbf{Objective} & \textbf{Percentile} & \textbf{Top-1} \\
@@ -309,13 +150,7 @@ negative sampling, is the change most likely to make profile edits behaviourally
 \begin{table}[t]
     \centering
     \small
-    \caption{Controls for the global attribution analysis. The genre-word ratio is the mean
-    attribution on a fixed genre lexicon divided by the mean on all other profile words, a
-    scale-invariant statistic comparable across models; $1.0$ means genre words are not
-    distinguished. Agreement is Spearman correlation of per-word attribution with the fine-tuned
-    condition, and top-$20$ overlap counts shared highest-attribution words. Genre words are
-    \emph{under}-attributed in the fine-tuned model, and the pattern largely survives removing
-    fine-tuning, removing pretraining, and shuffling word order.}
+\caption{Controls for the global attribution analysis. The genre-word ratio is the mean attribution on a fixed genre lexicon divided by the mean on all other profile words, a scale-invariant statistic comparable across models; $1.0$ means genre words are not distinguished. Agreement is Spearman correlation of per-word attribution with the fine-tuned condition, and top-$20$ overlap counts shared highest-attribution words. Genre words are \emph{under}-attributed in the fine-tuned model, and the pattern largely survives removing fine-tuning, removing pretraining, and shuffling word order.}
     \label{tab:attribution_controls}
     \begin{tabular}{lccc}
     \toprule
@@ -323,7 +158,7 @@ negative sampling, is the change most likely to make profile edits behaviourally
     \midrule
     Fine-tuned (reported)        & $0.546$ & ---      & --- \\
     Pretrained backbone only     & $0.381$ & $+0.452$ & $11/20$ \\
-    Random initialisation        & $1.169$ & $+0.229$ & $11/20$ \\
+    Random initialization        & $1.169$ & $+0.229$ & $11/20$ \\
     Fine-tuned, shuffled words   & $1.121$ & $+0.807$ & $10/20$ \\
     \bottomrule
     \multicolumn{4}{l}{\footnotesize Attribution vs corpus frequency: $\rho{=}-0.320$ ($p{=}0.027$); vs subword count: $\rho{=}0.212$ ($n.s.$).}
@@ -334,27 +169,8 @@ negative sampling, is the change most likely to make profile edits behaviourally
 % REVISED FIGURE CAPTIONS (replace the existing ones)
 % ---------------------------------------------------------------------------------------
 
-% Figure: user_profile_perturbation.png
-% Wide-angle 2D UMAP visualization of final layer normalization activation representations
-% extracted via \texttt{nnsight}. Background point clouds denote population-wide groupings of
-% profile representations, colour-coded and labelled by their most salient profile terms; we note
-% that these groupings track profile wording rather than validated taste, showing chance-level
-% agreement with users' history-derived genre preferences (adjusted Rand index $0.0008$,
-% \S\ref{sec:repr_structure}). Overlaid trajectory vectors depict counterfactual user profile
-% perturbations across three state transitions (Baseline Romance $\rightarrow$ Weak Action
-% Perturbation $\rightarrow$ Strong Dark Crime/Mystery Perturbation, detailed in
-% Table~\ref{tab:profile_perturbations}), together with a fitted linear probe boundary. Textual
-% interventions induce smooth, continuous and directional shifts in this representation space;
-% \S\ref{sec:repr_to_behaviour} shows that these shifts do not carry through to the model's
-% predicted ratings or rankings.
+% Figure: user_profile_perturbation.png Wide-angle 2D UMAP visualization of final layer normalization activation representations extracted via \texttt{nnsight}. Background point clouds denote population-wide groupings of profile representations, color-coded and labeled by their most salient profile terms; we note that these groupings track profile wording rather than validated taste, showing chance-level agreement with users' history-derived genre preferences (adjusted Rand index $0.0008$, \S\ref{sec:repr_structure}). Overlaid trajectory vectors depict counterfactual user profile perturbations across three state transitions (Baseline Romance $\rightarrow$ Weak Action Perturbation $\rightarrow$ Strong Dark Crime/Mystery Perturbation, detailed in Table~\ref{tab:profile_perturbations}), together with a fitted linear probe boundary. Textual interventions induce smooth, continuous and directional shifts in this representation space; \S\ref{sec:repr_to_behavior} shows that these shifts do not carry through to the model's predicted ratings or rankings.
 
-% Figure: user_profile_attribution.png
-% Local feature attribution scores for a single user profile and target item. Attribution is the
-% $L_2$ norm of the input-embedding gradient; see \S\ref{sec:attribution_controls} for controls
-% indicating that this saliency measure tracks word rarity and survives word shuffling, and should
-% not be read as isolating learned preference features.
+% Figure: user_profile_attribution.png Local feature attribution scores for a single user profile and target item. Attribution is the $L_2$ norm of the input-embedding gradient; see \S\ref{sec:attribution_controls} for controls indicating that this saliency measure tracks word rarity and survives word shuffling, and should not be read as isolating learned preference features.
 
-% Figure: global_profile_attribution.png
-% Global profile feature attributions across the full user population of the Amazon dataset. The
-% highest-attribution terms are dominated by dataset artifacts (e.g.\ ``widescreen'') and discourse
-% and style words rather than genre descriptors; \S\ref{sec:attribution_controls} quantifies this.
+% Figure: global_profile_attribution.png Global profile feature attributions across the full user population of the Amazon dataset. The highest-attribution terms are dominated by dataset artifacts (e.g.\ ``widescreen'') and discourse and style words rather than genre descriptors; \S\ref{sec:attribution_controls} quantifies this.

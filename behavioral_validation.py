@@ -1,8 +1,8 @@
-"""Behavioural validation of natural-language profile steering.
+"""Behavioral validation of natural-language profile steering.
 
 The UMAP trajectory produced by `user_profile_interpretability.py --run-perturbation`
 shows that editing a user profile moves its internal representation. This script tests
-the behaviourally meaningful question that movement alone does not answer: does the edit
+the behaviorally meaningful question that movement alone does not answer: does the edit
 move the model's *predicted ratings and rankings* toward the edited target genre?
 
 It reports four analyses:
@@ -10,8 +10,8 @@ It reports four analyses:
   1. `--run-variance`   Decomposes the variance of predicted ratings over a
                         profile x item grid into item, profile, and interaction
                         components. Genre-selective steering is an interaction effect,
-                        so this bounds how much of the model's behaviour it could explain.
-  2. `--run-steering`   Scores genre-labelled item pools under each perturbation state and
+                        so this bounds how much of the model's behavior it could explain.
+  2. `--run-steering`   Scores genre-labeled item pools under each perturbation state and
                         tests for a genre-selective shift in predicted rating and in rank.
                         Rank is invariant to a uniform additive shift in predicted rating
                         and therefore isolates the profile x item interaction.

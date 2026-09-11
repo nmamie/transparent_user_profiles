@@ -1,4 +1,4 @@
-"""Does anything personalise on this data, or is the task itself the problem?
+"""Does anything personalize on this data, or is the task itself the problem?
 
 `latent_steering.py --run-personalization` found that the fine-tuned profile model cannot rank a
 user's held-out item above random catalog items. That result is only interpretable against a
