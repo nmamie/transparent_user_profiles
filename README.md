@@ -1,5 +1,8 @@
 # Reproduction & Extension of "Transparent and Scrutable Recommendations Using Natural Language User Profiles"
 
+[![Paper arXiv](https://img.shields.io/badge/arXiv-2609.19831-B31B1B.svg)](https://arxiv.org/abs/2609.19831)
+[![BlackboxNLP @ EMNLP](https://img.shields.io/badge/BlackboxNLP-Accepted-blue.svg)](https://blackboxnlp.github.io/)
+
 This repository provides an enhanced, out-of-the-box reproducible implementation of the paper:
 
 > **Transparent and Scrutable Recommendations Using Natural Language User Profiles**  
