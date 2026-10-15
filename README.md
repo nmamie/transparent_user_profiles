@@ -9,6 +9,8 @@ This repository provides an enhanced, out-of-the-box reproducible implementation
 > 📄 **Paper**: [ACL Anthology](https://aclanthology.org/2024.acl-long.753)  
 > 🔗 **Original Codebase**: [jeromeramos70/user-profile-recommendation](https://github.com/jeromeramos70/user-profile-recommendation)
 
+To acknowledge the original work as well as our reproducibility paper, please refer to the [citation section](#-citation).
+
 ---
 
 ## 🌟 Acknowledgments & Reproducibility Enhancements
@@ -293,6 +295,21 @@ python generate_counterfactual_profiles.py
 ---
 
 ## 📜 Citation
+
+If you make use of our project in your work, please cite it accordingly:
+
+```bibtex
+@inproceedings{mamié2026reproducingtransparentscrutablerecommendations,
+      title={Reproducing Transparent and Scrutable Recommendations: Exploring Open-Weight Models via Natural-Language User Profiles}, 
+      author={\textbf{Noah Mamié} and Laurin van den Bergh},
+      note={Accepted at BlackBoxNLP@EMNLP'26 (The 9th BlackboxNLP Workshop Special Track: Reproducibility and Reliability in Interpretability Analyses)},
+      year={2026},
+      eprint={2609.19831},
+      archivePrefix={arXiv},
+      primaryClass={cs.IR},
+      url={https://arxiv.org/abs/2609.19831}, 
+}
+```
 
 To cite the original paper by Ramos et al.:
 
